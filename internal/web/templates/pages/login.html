@@ -1,0 +1,134 @@
+{{template "base" .}}
+
+{{define "title"}}Login - Go-Hunter{{end}}
+
+{{define "content"}}
+<div class="min-h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        <div>
+            <h1 class="text-center text-3xl font-bold text-gray-900">🎯 Go-Hunter</h1>
+            <h2 class="mt-6 text-center text-2xl font-bold text-gray-900">Sign in to your account</h2>
+        </div>
+
+        <div x-data="{ tab: 'login', error: '', loading: false }" class="mt-8 space-y-6">
+            <!-- Tabs -->
+            <div class="flex border-b border-gray-200">
+                <button
+                    @click="tab = 'login'"
+                    :class="tab === 'login' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm"
+                >
+                    Sign In
+                </button>
+                <button
+                    @click="tab = 'register'"
+                    :class="tab === 'register' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                    class="w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm"
+                >
+                    Register
+                </button>
+            </div>
+
+            <!-- Error Message -->
+            <div x-show="error" x-cloak class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                <span x-text="error"></span>
+            </div>
+
+            <!-- Login Form -->
+            <form x-show="tab === 'login'" x-cloak
+                @submit.prevent="
+                    loading = true;
+                    error = '';
+                    fetch('/api/v1/auth/login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({email: $refs.loginEmail.value, password: $refs.loginPassword.value})
+                    })
+                    .then(r => r.json().then(data => ({ok: r.ok, data})))
+                    .then(({ok, data}) => {
+                        loading = false;
+                        if (ok) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            error = data.error || 'Login failed';
+                        }
+                    })
+                    .catch(e => { loading = false; error = 'Network error'; });
+                "
+                class="space-y-6"
+            >
+                <div>
+                    <label for="login-email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input x-ref="loginEmail" type="email" id="login-email" required
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input x-ref="loginPassword" type="password" id="login-password" required
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button type="submit" :disabled="loading"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                    <span x-show="!loading">Sign In</span>
+                    <span x-show="loading">Signing in...</span>
+                </button>
+            </form>
+
+            <!-- Register Form -->
+            <form x-show="tab === 'register'" x-cloak
+                @submit.prevent="
+                    loading = true;
+                    error = '';
+                    fetch('/api/v1/auth/register', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            email: $refs.regEmail.value,
+                            password: $refs.regPassword.value,
+                            name: $refs.regName.value,
+                            org_name: $refs.regOrg.value
+                        })
+                    })
+                    .then(r => r.json().then(data => ({ok: r.ok, data})))
+                    .then(({ok, data}) => {
+                        loading = false;
+                        if (ok) {
+                            window.location.href = '/dashboard';
+                        } else {
+                            error = data.error || 'Registration failed';
+                        }
+                    })
+                    .catch(e => { loading = false; error = 'Network error'; });
+                "
+                class="space-y-6"
+            >
+                <div>
+                    <label for="reg-name" class="block text-sm font-medium text-gray-700">Name</label>
+                    <input x-ref="regName" type="text" id="reg-name" required
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="reg-email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input x-ref="regEmail" type="email" id="reg-email" required
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="reg-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input x-ref="regPassword" type="password" id="reg-password" required minlength="8"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label for="reg-org" class="block text-sm font-medium text-gray-700">Organization Name (optional)</label>
+                    <input x-ref="regOrg" type="text" id="reg-org"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <button type="submit" :disabled="loading"
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                    <span x-show="!loading">Create Account</span>
+                    <span x-show="loading">Creating...</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{{end}}
