@@ -11,7 +11,9 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/hugh/go-hunter/internal/api/handlers"
 	"github.com/hugh/go-hunter/internal/api/middleware"
+	"github.com/hugh/go-hunter/internal/assets"
 	"github.com/hugh/go-hunter/internal/auth"
+	"github.com/hugh/go-hunter/pkg/crypto"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -26,6 +28,7 @@ type RouterConfig struct {
 	Logger      *slog.Logger
 	JWTService  *auth.JWTService
 	AuthService *auth.Service
+	Encryptor   *crypto.Encryptor
 	Templates   *template.Template
 	StaticFS    fs.FS
 }
@@ -44,10 +47,14 @@ func NewRouter(cfg RouterConfig) *Router {
 		MaxAge:           300,
 	}))
 
+	// Initialize services
+	assetService := assets.NewService(cfg.DB, cfg.Encryptor, cfg.Logger)
+
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(cfg.DB, cfg.Redis)
 	authHandler := handlers.NewAuthHandler(cfg.AuthService)
 	dashboardHandler := handlers.NewDashboardHandler(cfg.DB, cfg.AuthService, cfg.Templates)
+	credentialHandler := handlers.NewCredentialHandler(assetService)
 
 	// Health endpoints (no auth required)
 	r.Get("/health", healthHandler.Health)
@@ -75,6 +82,14 @@ func NewRouter(cfg RouterConfig) *Router {
 				writeJSON(w, http.StatusOK, user)
 			})
 
+			// Credentials endpoints
+			r.Route("/credentials", func(r chi.Router) {
+				r.Get("/", credentialHandler.List)
+				r.Post("/", credentialHandler.Create)
+				r.Delete("/{id}", credentialHandler.Delete)
+				r.Post("/{id}/test", credentialHandler.Test)
+			})
+
 			// Assets endpoints (placeholder)
 			r.Route("/assets", func(r chi.Router) {
 				r.Get("/", placeholderHandler("List assets"))
@@ -96,13 +111,6 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Get("/", placeholderHandler("List findings"))
 				r.Get("/{id}", placeholderHandler("Get finding"))
 				r.Put("/{id}/status", placeholderHandler("Update finding status"))
-			})
-
-			// Credentials endpoints (placeholder)
-			r.Route("/credentials", func(r chi.Router) {
-				r.Get("/", placeholderHandler("List credentials"))
-				r.Post("/", placeholderHandler("Create credential"))
-				r.Delete("/{id}", placeholderHandler("Delete credential"))
 			})
 		})
 	})
