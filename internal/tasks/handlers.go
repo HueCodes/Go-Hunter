@@ -8,17 +8,24 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/hugh/go-hunter/internal/assets"
 	"github.com/hugh/go-hunter/internal/database/models"
+	"github.com/hugh/go-hunter/pkg/crypto"
 	"gorm.io/gorm"
 )
 
 type Handler struct {
-	db     *gorm.DB
-	logger *slog.Logger
+	db           *gorm.DB
+	logger       *slog.Logger
+	assetService *assets.Service
 }
 
-func NewHandler(db *gorm.DB, logger *slog.Logger) *Handler {
-	return &Handler{db: db, logger: logger}
+func NewHandler(db *gorm.DB, logger *slog.Logger, encryptor *crypto.Encryptor) *Handler {
+	return &Handler{
+		db:           db,
+		logger:       logger,
+		assetService: assets.NewService(db, encryptor, logger),
+	}
 }
 
 func (h *Handler) RegisterHandlers(mux *asynq.ServeMux) {
@@ -46,20 +53,38 @@ func (h *Handler) HandleAssetDiscovery(ctx context.Context, t *asynq.Task) error
 		return err
 	}
 
-	// TODO: Implement actual asset discovery logic
-	// - Connect to cloud providers using credentials
-	// - Discover EC2 instances, S3 buckets, domains, etc.
-	// - Create Asset records in database
+	// Run discovery for all credentials
+	discovered, err := h.assetService.DiscoverAssets(ctx, payload.OrganizationID, payload.CredentialIDs)
+	if err != nil {
+		h.logger.Error("asset discovery failed", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return err
+	}
 
-	// Simulate work for now
-	time.Sleep(2 * time.Second)
+	// Save discovered assets to database
+	savedCount, err := h.assetService.SaveDiscoveredAssets(ctx, payload.OrganizationID, nil, discovered)
+	if err != nil {
+		h.logger.Error("failed to save assets", "error", err)
+	}
+
+	// Update scan with results
+	if err := h.updateScanWithResults(payload.ScanID, savedCount, 0); err != nil {
+		h.logger.Error("failed to update scan results", "error", err)
+	}
 
 	// Mark scan as completed
 	if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
 		return err
 	}
 
-	h.logger.Info("completed asset discovery", "scan_id", payload.ScanID)
+	h.logger.Info("completed asset discovery",
+		"scan_id", payload.ScanID,
+		"discovered", len(discovered),
+		"saved", savedCount,
+	)
+
 	return nil
 }
 
@@ -195,6 +220,27 @@ func (h *Handler) updateScanStatus(scanID interface{}, status models.ScanStatus)
 		updates["started_at"] = time.Now().Unix()
 	} else if status == models.ScanStatusCompleted || status == models.ScanStatusFailed {
 		updates["completed_at"] = time.Now().Unix()
+	}
+
+	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) updateScanStatusWithError(scanID interface{}, status models.ScanStatus, errMsg string) error {
+	updates := map[string]interface{}{
+		"status":       status,
+		"error":        errMsg,
+		"updated_at":   time.Now(),
+		"completed_at": time.Now().Unix(),
+	}
+
+	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) updateScanWithResults(scanID interface{}, assetsScanned, findingsCount int) error {
+	updates := map[string]interface{}{
+		"assets_scanned":  assetsScanned,
+		"findings_count":  findingsCount,
+		"updated_at":      time.Now(),
 	}
 
 	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
