@@ -11,6 +11,7 @@ import (
 	"github.com/hugh/go-hunter/internal/database"
 	"github.com/hugh/go-hunter/internal/tasks"
 	"github.com/hugh/go-hunter/pkg/config"
+	"github.com/hugh/go-hunter/pkg/crypto"
 	"github.com/hugh/go-hunter/pkg/queue"
 	"github.com/hugh/go-hunter/pkg/util"
 	"github.com/joho/godotenv"
@@ -40,11 +41,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize encryptor for credential decryption
+	encryptor, err := crypto.NewEncryptor(cfg.Encryption.Key)
+	if err != nil {
+		logger.Error("failed to create encryptor", "error", err)
+		os.Exit(1)
+	}
+	if cfg.Encryption.Key == "" {
+		logger.Warn("ENCRYPTION_KEY not set, using generated key - credentials will not be decryptable")
+	}
+
 	// Create Asynq server
 	srv := queue.NewServer(&cfg.Redis, 10)
 
 	// Create task handler
-	handler := tasks.NewHandler(db, logger)
+	handler := tasks.NewHandler(db, logger, encryptor)
 
 	// Register handlers
 	mux := asynq.NewServeMux()
