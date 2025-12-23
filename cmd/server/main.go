@@ -14,6 +14,7 @@ import (
 	"github.com/hugh/go-hunter/internal/database"
 	"github.com/hugh/go-hunter/internal/web"
 	"github.com/hugh/go-hunter/pkg/config"
+	"github.com/hugh/go-hunter/pkg/crypto"
 	"github.com/hugh/go-hunter/pkg/util"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -69,6 +70,16 @@ func main() {
 	jwtService := auth.NewJWTService(cfg.JWT.Secret, cfg.JWT.Expiry())
 	authService := auth.NewService(db, jwtService)
 
+	// Initialize encryptor for credential storage
+	encryptor, err := crypto.NewEncryptor(cfg.Encryption.Key)
+	if err != nil {
+		logger.Error("failed to create encryptor", "error", err)
+		os.Exit(1)
+	}
+	if cfg.Encryption.Key == "" {
+		logger.Warn("ENCRYPTION_KEY not set, using generated key - credentials will be lost on restart")
+	}
+
 	// Load templates
 	templates, err := web.LoadTemplates()
 	if err != nil {
@@ -90,6 +101,7 @@ func main() {
 		Logger:      logger,
 		JWTService:  jwtService,
 		AuthService: authService,
+		Encryptor:   encryptor,
 		Templates:   templates,
 		StaticFS:    staticFS,
 	})
