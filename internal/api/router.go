@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/hibiken/asynq"
 	"github.com/hugh/go-hunter/internal/api/handlers"
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/assets"
@@ -31,6 +32,7 @@ type RouterConfig struct {
 	Encryptor   *crypto.Encryptor
 	Templates   *template.Template
 	StaticFS    fs.FS
+	AsynqClient *asynq.Client
 }
 
 func NewRouter(cfg RouterConfig) *Router {
@@ -55,6 +57,9 @@ func NewRouter(cfg RouterConfig) *Router {
 	authHandler := handlers.NewAuthHandler(cfg.AuthService)
 	dashboardHandler := handlers.NewDashboardHandler(cfg.DB, cfg.AuthService, cfg.Templates)
 	credentialHandler := handlers.NewCredentialHandler(assetService)
+	assetHandler := handlers.NewAssetHandler(cfg.DB)
+	scanHandler := handlers.NewScanHandler(cfg.DB, cfg.AsynqClient)
+	findingHandler := handlers.NewFindingHandler(cfg.DB)
 
 	// Health endpoints (no auth required)
 	r.Get("/health", healthHandler.Health)
@@ -90,27 +95,27 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Post("/{id}/test", credentialHandler.Test)
 			})
 
-			// Assets endpoints (placeholder)
+			// Assets endpoints
 			r.Route("/assets", func(r chi.Router) {
-				r.Get("/", placeholderHandler("List assets"))
-				r.Post("/", placeholderHandler("Create asset"))
-				r.Get("/{id}", placeholderHandler("Get asset"))
-				r.Delete("/{id}", placeholderHandler("Delete asset"))
+				r.Get("/", assetHandler.List)
+				r.Post("/", assetHandler.Create)
+				r.Get("/{id}", assetHandler.Get)
+				r.Delete("/{id}", assetHandler.Delete)
 			})
 
-			// Scans endpoints (placeholder)
+			// Scans endpoints
 			r.Route("/scans", func(r chi.Router) {
-				r.Get("/", placeholderHandler("List scans"))
-				r.Post("/", placeholderHandler("Create scan"))
-				r.Get("/{id}", placeholderHandler("Get scan"))
-				r.Post("/{id}/cancel", placeholderHandler("Cancel scan"))
+				r.Get("/", scanHandler.List)
+				r.Post("/", scanHandler.Create)
+				r.Get("/{id}", scanHandler.Get)
+				r.Post("/{id}/cancel", scanHandler.Cancel)
 			})
 
-			// Findings endpoints (placeholder)
+			// Findings endpoints
 			r.Route("/findings", func(r chi.Router) {
-				r.Get("/", placeholderHandler("List findings"))
-				r.Get("/{id}", placeholderHandler("Get finding"))
-				r.Put("/{id}/status", placeholderHandler("Update finding status"))
+				r.Get("/", findingHandler.List)
+				r.Get("/{id}", findingHandler.Get)
+				r.Put("/{id}/status", findingHandler.UpdateStatus)
 			})
 		})
 	})
@@ -131,14 +136,6 @@ func NewRouter(cfg RouterConfig) *Router {
 	}
 
 	return &Router{r}
-}
-
-func placeholderHandler(message string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{
-			"message": message + " - coming soon",
-		})
-	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
