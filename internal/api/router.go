@@ -24,15 +24,18 @@ type Router struct {
 }
 
 type RouterConfig struct {
-	DB          *gorm.DB
-	Redis       *redis.Client
-	Logger      *slog.Logger
-	JWTService  *auth.JWTService
-	AuthService *auth.Service
-	Encryptor   *crypto.Encryptor
-	Templates   *template.Template
-	StaticFS    fs.FS
-	AsynqClient *asynq.Client
+	DB             *gorm.DB
+	Redis          *redis.Client
+	Logger         *slog.Logger
+	JWTService     *auth.JWTService
+	AuthService    *auth.Service
+	Encryptor      *crypto.Encryptor
+	Templates      *template.Template
+	StaticFS       fs.FS
+	AsynqClient    *asynq.Client
+	AllowedOrigins []string // CORS allowed origins
+	RateLimitReqs  int      // Rate limit requests per window
+	RateLimitSecs  int      // Rate limit window in seconds
 }
 
 func NewRouter(cfg RouterConfig) *Router {
@@ -41,10 +44,23 @@ func NewRouter(cfg RouterConfig) *Router {
 	// Global middleware
 	r.Use(middleware.Recovery(cfg.Logger))
 	r.Use(middleware.Logging(cfg.Logger))
+
+	// Rate limiting - applied globally to prevent abuse
+	if cfg.RateLimitReqs > 0 {
+		r.Use(middleware.RateLimit(cfg.RateLimitReqs, cfg.RateLimitSecs))
+	}
+
+	// CORS - restrict to configured origins, or allow all in development
+	allowedOrigins := cfg.AllowedOrigins
+	if len(allowedOrigins) == 0 {
+		// Default to localhost for development - configure in production
+		allowedOrigins = []string{"http://localhost:3000", "http://localhost:8080"}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
