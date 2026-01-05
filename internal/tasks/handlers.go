@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -72,6 +73,10 @@ func (h *Handler) HandleAssetDiscovery(ctx context.Context, t *asynq.Task) error
 	savedCount, err := h.assetService.SaveDiscoveredAssets(ctx, payload.OrganizationID, nil, discovered)
 	if err != nil {
 		h.logger.Error("failed to save assets", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return fmt.Errorf("saving discovered assets: %w", err)
 	}
 
 	// Update scan with results
@@ -109,18 +114,100 @@ func (h *Handler) HandlePortScan(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 
-	// TODO: Implement port scanning using naabu library
-	// - Load assets from database
-	// - Run port scan on each asset
-	// - Create Finding records for open ports
+	// Parse port specification
+	ports, err := scanner.ParsePorts(payload.Ports)
+	if err != nil {
+		h.logger.Error("failed to parse ports", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return fmt.Errorf("parsing ports: %w", err)
+	}
 
-	time.Sleep(2 * time.Second)
+	// Load scannable assets (IPs and domains)
+	var assets []models.Asset
+	query := h.db.WithContext(ctx).
+		Where("organization_id = ?", payload.OrganizationID).
+		Where("type IN ?", []models.AssetType{models.AssetTypeIP, models.AssetTypeDomain, models.AssetTypeSubdomain}).
+		Where("is_active = ?", true)
+
+	if len(payload.AssetIDs) > 0 {
+		query = query.Where("id IN ?", payload.AssetIDs)
+	}
+
+	if err := query.Find(&assets).Error; err != nil {
+		h.logger.Error("failed to load assets", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return fmt.Errorf("loading assets: %w", err)
+	}
+
+	if len(assets) == 0 {
+		h.logger.Info("no scannable assets found", "scan_id", payload.ScanID)
+		if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Configure scanner
+	concurrency := 100
+	if payload.RateLimit > 0 && payload.RateLimit < concurrency {
+		concurrency = payload.RateLimit
+	}
+
+	portScanner := scanner.NewPortScanner(h.logger, &scanner.PortScanConfig{
+		Timeout:     3 * time.Second,
+		Concurrency: concurrency,
+	})
+
+	var totalFindings int
+	var totalOpenPorts int
+
+	// Scan each asset
+	for _, asset := range assets {
+		h.logger.Debug("scanning asset",
+			"asset_id", asset.ID,
+			"host", asset.Value,
+			"ports", len(ports),
+		)
+
+		results := portScanner.ScanHost(ctx, asset.Value, ports)
+		totalOpenPorts += len(results)
+
+		// Convert results to findings
+		findings := portScanner.ResultsToFindings(asset.Value, results, asset.ID, payload.ScanID, payload.OrganizationID)
+
+		// Save findings
+		for _, finding := range findings {
+			if err := h.saveFinding(ctx, finding); err != nil {
+				h.logger.Error("failed to save port finding",
+					"host", asset.Value,
+					"port", finding.Port,
+					"error", err,
+				)
+				continue
+			}
+			totalFindings++
+		}
+	}
+
+	// Update scan with results
+	if err := h.updateScanWithPortResults(payload.ScanID, len(assets), totalFindings, totalOpenPorts); err != nil {
+		h.logger.Error("failed to update scan results", "error", err)
+	}
 
 	if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
 		return err
 	}
 
-	h.logger.Info("completed port scan", "scan_id", payload.ScanID)
+	h.logger.Info("completed port scan",
+		"scan_id", payload.ScanID,
+		"assets_scanned", len(assets),
+		"open_ports", totalOpenPorts,
+		"findings", totalFindings,
+	)
 	return nil
 }
 
@@ -133,24 +220,100 @@ func (h *Handler) HandleHTTPProbe(ctx context.Context, t *asynq.Task) error {
 	h.logger.Info("starting HTTP probe",
 		"scan_id", payload.ScanID,
 		"assets", len(payload.AssetIDs),
+		"ports", payload.Ports,
 	)
 
 	if err := h.updateScanStatus(payload.ScanID, models.ScanStatusRunning); err != nil {
 		return err
 	}
 
-	// TODO: Implement HTTP probing
-	// - Check if HTTP/HTTPS services are running
-	// - Extract headers, titles, technologies
-	// - Create findings for interesting discoveries
+	// Determine ports to probe
+	ports := payload.Ports
+	if len(ports) == 0 {
+		// Default HTTP/HTTPS ports
+		ports = []int{80, 443, 8080, 8443, 8000, 3000, 5000, 9443}
+	}
 
-	time.Sleep(2 * time.Second)
+	// Load scannable assets (IPs and domains)
+	var assets []models.Asset
+	query := h.db.WithContext(ctx).
+		Where("organization_id = ?", payload.OrganizationID).
+		Where("type IN ?", []models.AssetType{models.AssetTypeIP, models.AssetTypeDomain, models.AssetTypeSubdomain}).
+		Where("is_active = ?", true)
+
+	if len(payload.AssetIDs) > 0 {
+		query = query.Where("id IN ?", payload.AssetIDs)
+	}
+
+	if err := query.Find(&assets).Error; err != nil {
+		h.logger.Error("failed to load assets", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return fmt.Errorf("loading assets: %w", err)
+	}
+
+	if len(assets) == 0 {
+		h.logger.Info("no scannable assets found", "scan_id", payload.ScanID)
+		if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Configure prober
+	prober := scanner.NewHTTPProber(h.logger, &scanner.HTTPProbeConfig{
+		Timeout:        10 * time.Second,
+		Concurrency:    50,
+		FollowRedirect: payload.FollowRedirect,
+	})
+
+	var totalFindings int
+	var totalServices int
+
+	// Probe each asset
+	for _, asset := range assets {
+		h.logger.Debug("probing asset",
+			"asset_id", asset.ID,
+			"host", asset.Value,
+			"ports", len(ports),
+		)
+
+		results := prober.ProbeHost(ctx, asset.Value, ports)
+		totalServices += len(results)
+
+		// Convert results to findings
+		findings := prober.ResultsToFindings(asset.Value, results, asset.ID, payload.ScanID, payload.OrganizationID)
+
+		// Save findings
+		for _, finding := range findings {
+			if err := h.saveFinding(ctx, finding); err != nil {
+				h.logger.Error("failed to save HTTP finding",
+					"host", asset.Value,
+					"title", finding.Title,
+					"error", err,
+				)
+				continue
+			}
+			totalFindings++
+		}
+	}
+
+	// Update scan with results
+	if err := h.updateScanWithHTTPResults(payload.ScanID, len(assets), totalFindings, totalServices); err != nil {
+		h.logger.Error("failed to update scan results", "error", err)
+	}
 
 	if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
 		return err
 	}
 
-	h.logger.Info("completed HTTP probe", "scan_id", payload.ScanID)
+	h.logger.Info("completed HTTP probe",
+		"scan_id", payload.ScanID,
+		"assets_scanned", len(assets),
+		"services_found", totalServices,
+		"findings", totalFindings,
+	)
 	return nil
 }
 
@@ -170,18 +333,124 @@ func (h *Handler) HandleCrawl(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 
-	// TODO: Implement web crawling
-	// - Crawl web applications
-	// - Discover endpoints, forms, JavaScript files
-	// - Create Asset records for discovered endpoints
+	// Set defaults
+	maxDepth := payload.MaxDepth
+	if maxDepth <= 0 {
+		maxDepth = 3
+	}
+	maxPages := payload.MaxPages
+	if maxPages <= 0 {
+		maxPages = 100
+	}
 
-	time.Sleep(2 * time.Second)
+	// Load endpoint assets (URLs to crawl)
+	var assets []models.Asset
+	query := h.db.WithContext(ctx).
+		Where("organization_id = ?", payload.OrganizationID).
+		Where("type IN ?", []models.AssetType{models.AssetTypeEndpoint, models.AssetTypeDomain, models.AssetTypeSubdomain}).
+		Where("is_active = ?", true)
+
+	if len(payload.AssetIDs) > 0 {
+		query = query.Where("id IN ?", payload.AssetIDs)
+	}
+
+	if err := query.Find(&assets).Error; err != nil {
+		h.logger.Error("failed to load assets", "error", err)
+		if updateErr := h.updateScanStatusWithError(payload.ScanID, models.ScanStatusFailed, err.Error()); updateErr != nil {
+			h.logger.Error("failed to update scan status", "error", updateErr)
+		}
+		return fmt.Errorf("loading assets: %w", err)
+	}
+
+	if len(assets) == 0 {
+		h.logger.Info("no crawlable assets found", "scan_id", payload.ScanID)
+		if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Configure crawler
+	crawler := scanner.NewWebCrawler(h.logger, &scanner.WebCrawlerConfig{
+		Timeout:     15 * time.Second,
+		MaxDepth:    maxDepth,
+		MaxPages:    maxPages,
+		Concurrency: 10,
+	})
+
+	var totalFindings int
+	var totalPagesCrawled int
+
+	// Crawl each asset
+	for _, asset := range assets {
+		// Determine URL to crawl
+		var crawlURL string
+		if strings.HasPrefix(asset.Value, "http://") || strings.HasPrefix(asset.Value, "https://") {
+			crawlURL = asset.Value
+		} else {
+			// Default to HTTPS for domains
+			crawlURL = "https://" + asset.Value
+		}
+
+		h.logger.Debug("crawling asset",
+			"asset_id", asset.ID,
+			"url", crawlURL,
+		)
+
+		result, err := crawler.CrawlURL(ctx, crawlURL)
+		if err != nil {
+			h.logger.Error("failed to crawl",
+				"url", crawlURL,
+				"error", err,
+			)
+			continue
+		}
+
+		totalPagesCrawled += result.PagesCrawled
+
+		// Convert results to findings
+		findings := crawler.ResultsToFindings(result, asset.ID, payload.ScanID, payload.OrganizationID)
+
+		// Save findings
+		for _, finding := range findings {
+			if err := h.saveFinding(ctx, finding); err != nil {
+				h.logger.Error("failed to save crawl finding",
+					"url", crawlURL,
+					"title", finding.Title,
+					"error", err,
+				)
+				continue
+			}
+			totalFindings++
+		}
+
+		// Convert discovered endpoints to assets
+		newAssets := crawler.ResultsToAssets(result, payload.OrganizationID, &asset.ID)
+		for _, newAsset := range newAssets {
+			if err := h.saveDiscoveredAsset(ctx, newAsset); err != nil {
+				h.logger.Debug("failed to save discovered asset",
+					"value", newAsset.Value,
+					"error", err,
+				)
+			}
+		}
+	}
+
+	// Update scan with results
+	if err := h.updateScanWithCrawlResults(payload.ScanID, len(assets), totalFindings, totalPagesCrawled); err != nil {
+		h.logger.Error("failed to update scan results", "error", err)
+	}
 
 	if err := h.updateScanStatus(payload.ScanID, models.ScanStatusCompleted); err != nil {
 		return err
 	}
 
-	h.logger.Info("completed crawl", "scan_id", payload.ScanID)
+	h.logger.Info("completed crawl",
+		"scan_id", payload.ScanID,
+		"assets_crawled", len(assets),
+		"pages_crawled", totalPagesCrawled,
+		"findings", totalFindings,
+	)
 	return nil
 }
 
@@ -385,10 +654,60 @@ func (h *Handler) updateScanStatusWithError(scanID interface{}, status models.Sc
 
 func (h *Handler) updateScanWithResults(scanID interface{}, assetsScanned, findingsCount int) error {
 	updates := map[string]interface{}{
-		"assets_scanned":  assetsScanned,
-		"findings_count":  findingsCount,
-		"updated_at":      time.Now(),
+		"assets_scanned": assetsScanned,
+		"findings_count": findingsCount,
+		"updated_at":     time.Now(),
 	}
 
 	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) updateScanWithPortResults(scanID interface{}, assetsScanned, findingsCount, portsOpen int) error {
+	updates := map[string]interface{}{
+		"assets_scanned": assetsScanned,
+		"findings_count": findingsCount,
+		"ports_open":     portsOpen,
+		"updated_at":     time.Now(),
+	}
+
+	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) updateScanWithHTTPResults(scanID interface{}, assetsScanned, findingsCount, servicesFound int) error {
+	updates := map[string]interface{}{
+		"assets_scanned": assetsScanned,
+		"findings_count": findingsCount,
+		"services_found": servicesFound,
+		"updated_at":     time.Now(),
+	}
+
+	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) updateScanWithCrawlResults(scanID interface{}, assetsScanned, findingsCount, pagesCrawled int) error {
+	updates := map[string]interface{}{
+		"assets_scanned": assetsScanned,
+		"findings_count": findingsCount,
+		"updated_at":     time.Now(),
+	}
+
+	return h.db.Model(&models.Scan{}).Where("id = ?", scanID).Updates(updates).Error
+}
+
+func (h *Handler) saveDiscoveredAsset(ctx context.Context, asset models.Asset) error {
+	result := h.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "organization_id"},
+			{Name: "type"},
+			{Name: "value"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"last_seen_at",
+			"source",
+			"metadata",
+			"is_active",
+		}),
+	}).Create(&asset)
+
+	return result.Error
 }
