@@ -84,8 +84,8 @@ func (c *S3Checker) CheckBucket(ctx context.Context, bucketName string, assetID,
 	var results []CheckResult
 
 	// Run all checks, collecting results
-	if result := c.checkBucketACL(ctx, client, bucketName); result != nil {
-		results = append(results, *result...)
+	if aclResults := c.checkBucketACL(ctx, client, bucketName); len(aclResults) > 0 {
+		results = append(results, aclResults...)
 	}
 
 	if result := c.checkBucketPolicy(ctx, client, bucketName); result != nil {
@@ -205,7 +205,7 @@ func (c *S3Checker) loadConfig(ctx context.Context, region string) (aws.Config, 
 }
 
 // checkBucketACL checks for public read/write access via ACL
-func (c *S3Checker) checkBucketACL(ctx context.Context, client *s3.Client, bucketName string) *[]CheckResult {
+func (c *S3Checker) checkBucketACL(ctx context.Context, client *s3.Client, bucketName string) []CheckResult {
 	result, err := client.GetBucketAcl(ctx, &s3.GetBucketAclInput{
 		Bucket: aws.String(bucketName),
 	})
@@ -305,10 +305,7 @@ func (c *S3Checker) checkBucketACL(ctx context.Context, client *s3.Client, bucke
 		}
 	}
 
-	if len(results) > 0 {
-		return &results
-	}
-	return nil
+	return results
 }
 
 // checkBucketPolicy checks for public access via bucket policy
