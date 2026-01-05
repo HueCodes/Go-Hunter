@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/hugh/go-hunter/internal/api"
 	"github.com/hugh/go-hunter/internal/auth"
 	"github.com/hugh/go-hunter/internal/database"
@@ -66,6 +67,15 @@ func main() {
 		redisClient = nil
 	}
 
+	// Initialize Asynq client for background job enqueuing
+	var asynqClient *asynq.Client
+	if redisClient != nil {
+		asynqClient = asynq.NewClient(asynq.RedisClientOpt{
+			Addr:     cfg.Redis.Addr(),
+			Password: cfg.Redis.Password,
+		})
+	}
+
 	// Initialize services
 	jwtService := auth.NewJWTService(cfg.JWT.Secret, cfg.JWT.Expiry())
 	authService := auth.NewService(db, jwtService)
@@ -96,14 +106,17 @@ func main() {
 
 	// Create router
 	router := api.NewRouter(api.RouterConfig{
-		DB:          db,
-		Redis:       redisClient,
-		Logger:      logger,
-		JWTService:  jwtService,
-		AuthService: authService,
-		Encryptor:   encryptor,
-		Templates:   templates,
-		StaticFS:    staticFS,
+		DB:             db,
+		Redis:          redisClient,
+		Logger:         logger,
+		JWTService:     jwtService,
+		AuthService:    authService,
+		Encryptor:      encryptor,
+		Templates:      templates,
+		StaticFS:       staticFS,
+		AsynqClient:    asynqClient,
+		RateLimitReqs:  cfg.RateLimit.Requests,
+		RateLimitSecs:  cfg.RateLimit.WindowSeconds,
 	})
 
 	// Create HTTP server
@@ -137,6 +150,11 @@ func main() {
 
 	if err := server.Shutdown(ctx); err != nil {
 		logger.Error("server shutdown error", "error", err)
+	}
+
+	// Close Asynq client
+	if asynqClient != nil {
+		asynqClient.Close()
 	}
 
 	// Close Redis connection
