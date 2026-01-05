@@ -199,6 +199,27 @@ func (s *Service) SaveDiscoveredAssets(ctx context.Context, orgID uuid.UUID, cre
 			asset.CredentialID = *credID
 		}
 
+		// First, try to reactivate a soft-deleted asset if it exists
+		reactivated := s.db.WithContext(ctx).Unscoped().
+			Model(&models.Asset{}).
+			Where("organization_id = ? AND type = ? AND value = ? AND deleted_at IS NOT NULL", orgID, d.Type, d.Value).
+			Updates(map[string]interface{}{
+				"deleted_at":   nil,
+				"last_seen_at": now,
+				"source":       d.Source,
+				"metadata":     string(metadataJSON),
+				"is_active":    true,
+			})
+
+		if reactivated.RowsAffected > 0 {
+			s.logger.Debug("reactivated soft-deleted asset",
+				"type", d.Type,
+				"value", d.Value,
+			)
+			saved++
+			continue
+		}
+
 		// Upsert: update if exists, create if not
 		result := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns: []clause.Column{
@@ -212,11 +233,6 @@ func (s *Service) SaveDiscoveredAssets(ctx context.Context, orgID uuid.UUID, cre
 				"metadata",
 				"is_active",
 			}),
-			Where: clause.Where{
-				Exprs: []clause.Expression{
-					clause.Expr{SQL: "deleted_at IS NULL"},
-				},
-			},
 		}).Create(&asset)
 
 		if result.Error != nil {
