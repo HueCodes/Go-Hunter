@@ -51,17 +51,17 @@ type HTTPProbeResult struct {
 
 // TLSInfo contains TLS certificate information
 type TLSInfo struct {
-	Version            string
-	CipherSuite        string
-	Subject            string
-	Issuer             string
-	NotBefore          time.Time
-	NotAfter           time.Time
-	DNSNames           []string
-	IsExpired          bool
-	DaysUntilExpiry    int
-	IsSelfsigned       bool
-	CertificateChain   int
+	Version          string
+	CipherSuite      string
+	Subject          string
+	Issuer           string
+	NotBefore        time.Time
+	NotAfter         time.Time
+	DNSNames         []string
+	IsExpired        bool
+	DaysUntilExpiry  int
+	IsSelfsigned     bool
+	CertificateChain int
 }
 
 // NewHTTPProber creates a new HTTP prober instance
