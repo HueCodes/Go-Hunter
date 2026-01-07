@@ -51,15 +51,34 @@ func main() {
 		logger.Warn("ENCRYPTION_KEY not set, using generated key - credentials will not be decryptable")
 	}
 
-	// Create Asynq server
+	// Create Asynq client and server
+	asynqClient := queue.NewClient(&cfg.Redis)
+	defer asynqClient.Close()
+
 	srv := queue.NewServer(&cfg.Redis, 10)
 
 	// Create task handler
-	handler := tasks.NewHandler(db, logger, encryptor)
+	handler := tasks.NewHandler(db, logger, encryptor, asynqClient)
 
 	// Register handlers
 	mux := asynq.NewServeMux()
 	handler.RegisterHandlers(mux)
+
+	// Create scheduler for periodic tasks
+	scheduler := asynq.NewScheduler(
+		asynq.RedisClientOpt{
+			Addr:     cfg.Redis.Addr(),
+			Password: cfg.Redis.Password,
+		},
+		nil,
+	)
+
+	// Schedule the scheduler tick to run every minute
+	_, err = scheduler.Register("@every 1m", tasks.NewSchedulerTickTask())
+	if err != nil {
+		logger.Error("failed to register scheduler tick", "error", err)
+		os.Exit(1)
+	}
 
 	// Handle shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,8 +89,16 @@ func main() {
 		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 		<-quit
 		logger.Info("shutting down worker...")
+		scheduler.Shutdown()
 		srv.Shutdown()
 		cancel()
+	}()
+
+	// Start the scheduler
+	go func() {
+		if err := scheduler.Run(); err != nil {
+			logger.Error("scheduler error", "error", err)
+		}
 	}()
 
 	logger.Info("worker started, waiting for tasks...")
