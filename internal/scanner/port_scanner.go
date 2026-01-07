@@ -392,15 +392,15 @@ func (s *PortScanner) generatePortDescription(host string, result PortScanResult
 // generatePortRemediation creates remediation advice
 func (s *PortScanner) generatePortRemediation(result PortScanResult) string {
 	remediations := map[string]string{
-		"telnet": "Disable Telnet and use SSH for secure remote access. Telnet transmits data in plaintext.",
-		"ftp":    "Consider using SFTP or FTPS instead of FTP. If FTP is required, restrict access to specific IP addresses.",
-		"rdp":    "Restrict RDP access using firewall rules. Enable Network Level Authentication (NLA). Consider using a VPN.",
-		"ssh":    "Ensure SSH is using key-based authentication. Disable root login. Keep SSH updated.",
-		"mysql":  "Restrict database access to application servers only. Do not expose databases to the internet.",
+		"telnet":     "Disable Telnet and use SSH for secure remote access. Telnet transmits data in plaintext.",
+		"ftp":        "Consider using SFTP or FTPS instead of FTP. If FTP is required, restrict access to specific IP addresses.",
+		"rdp":        "Restrict RDP access using firewall rules. Enable Network Level Authentication (NLA). Consider using a VPN.",
+		"ssh":        "Ensure SSH is using key-based authentication. Disable root login. Keep SSH updated.",
+		"mysql":      "Restrict database access to application servers only. Do not expose databases to the internet.",
 		"postgresql": "Restrict database access to application servers only. Use strong authentication.",
-		"redis":  "Enable authentication for Redis. Bind to localhost or use firewall rules to restrict access.",
-		"mongodb": "Enable authentication. Restrict network access. Bind to localhost or trusted networks.",
-		"vnc":    "VNC is inherently insecure. Use SSH tunneling or a VPN for remote access.",
+		"redis":      "Enable authentication for Redis. Bind to localhost or use firewall rules to restrict access.",
+		"mongodb":    "Enable authentication. Restrict network access. Bind to localhost or trusted networks.",
+		"vnc":        "VNC is inherently insecure. Use SSH tunneling or a VPN for remote access.",
 	}
 
 	if advice, ok := remediations[result.Service]; ok {
