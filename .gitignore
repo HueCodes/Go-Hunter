@@ -47,3 +47,8 @@ coverage.html
 # Age keys (sensitive!)
 *.key
 *.age-key
+
+# Local notes (not pushed to GitHub)
+LOCAL_NOTES.md
+*.local.md
+.local/
