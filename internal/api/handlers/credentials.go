@@ -42,7 +42,7 @@ func (r CreateCredentialRequest) Validate() map[string]string {
 	if !validProviders[r.Provider] {
 		errors["provider"] = "Invalid provider"
 	}
-	if r.Data == nil || len(r.Data) == 0 {
+	if len(r.Data) == 0 {
 		errors["data"] = "Credential data is required"
 	}
 	return errors
@@ -50,12 +50,12 @@ func (r CreateCredentialRequest) Validate() map[string]string {
 
 // CredentialResponse represents a credential in API responses (no secrets)
 type CredentialResponse struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Provider   string `json:"provider"`
-	IsActive   bool   `json:"is_active"`
-	LastUsed   int64  `json:"last_used,omitempty"`
-	CreatedAt  string `json:"created_at"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	IsActive  bool   `json:"is_active"`
+	LastUsed  int64  `json:"last_used,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 // Create handles POST /api/v1/credentials
