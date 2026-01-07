@@ -14,6 +14,7 @@ import (
 	"github.com/hugh/go-hunter/internal/database/models"
 	"github.com/hugh/go-hunter/internal/scanner"
 	"github.com/hugh/go-hunter/pkg/crypto"
+	"github.com/hugh/go-hunter/pkg/util"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -23,14 +24,16 @@ type Handler struct {
 	logger       *slog.Logger
 	assetService *assets.Service
 	encryptor    *crypto.Encryptor
+	asynqClient  *asynq.Client
 }
 
-func NewHandler(db *gorm.DB, logger *slog.Logger, encryptor *crypto.Encryptor) *Handler {
+func NewHandler(db *gorm.DB, logger *slog.Logger, encryptor *crypto.Encryptor, asynqClient *asynq.Client) *Handler {
 	return &Handler{
 		db:           db,
 		logger:       logger,
 		assetService: assets.NewService(db, encryptor, logger),
 		encryptor:    encryptor,
+		asynqClient:  asynqClient,
 	}
 }
 
@@ -40,6 +43,7 @@ func (h *Handler) RegisterHandlers(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeHTTPProbe, h.HandleHTTPProbe)
 	mux.HandleFunc(TypeCrawl, h.HandleCrawl)
 	mux.HandleFunc(TypeVulnCheck, h.HandleVulnCheck)
+	mux.HandleFunc(TypeSchedulerTick, h.HandleSchedulerTick)
 }
 
 func (h *Handler) HandleAssetDiscovery(ctx context.Context, t *asynq.Task) error {
@@ -710,4 +714,146 @@ func (h *Handler) saveDiscoveredAsset(ctx context.Context, asset models.Asset) e
 	}).Create(&asset)
 
 	return result.Error
+}
+
+// HandleSchedulerTick processes scheduled scans that are due to run
+func (h *Handler) HandleSchedulerTick(ctx context.Context, t *asynq.Task) error {
+	now := time.Now().Unix()
+
+	h.logger.Debug("scheduler tick", "now", now)
+
+	// Find all enabled schedules where next_run_at <= now
+	var schedules []models.ScheduledScan
+	if err := h.db.WithContext(ctx).
+		Where("is_enabled = ? AND next_run_at <= ? AND deleted_at IS NULL", true, now).
+		Find(&schedules).Error; err != nil {
+		return fmt.Errorf("querying due schedules: %w", err)
+	}
+
+	if len(schedules) == 0 {
+		h.logger.Debug("no scheduled scans due")
+		return nil
+	}
+
+	h.logger.Info("processing scheduled scans", "count", len(schedules))
+
+	for _, sched := range schedules {
+		if err := h.runScheduledScan(ctx, &sched); err != nil {
+			h.logger.Error("failed to run scheduled scan",
+				"schedule_id", sched.ID,
+				"name", sched.Name,
+				"error", err,
+			)
+			// Continue with other schedules
+			continue
+		}
+	}
+
+	return nil
+}
+
+// runScheduledScan creates and enqueues a scan from a schedule, then updates the schedule
+func (h *Handler) runScheduledScan(ctx context.Context, sched *models.ScheduledScan) error {
+	// Create a scan from the schedule
+	scan := models.Scan{
+		OrganizationID: sched.OrganizationID,
+		Type:           sched.ScanType,
+		Status:         models.ScanStatusPending,
+		TargetAssetIDs: sched.TargetAssetIDs,
+		CredentialIDs:  sched.CredentialIDs,
+		Config:         sched.Config,
+	}
+
+	if err := h.db.WithContext(ctx).Create(&scan).Error; err != nil {
+		return fmt.Errorf("creating scan: %w", err)
+	}
+
+	h.logger.Info("created scan from schedule",
+		"schedule_id", sched.ID,
+		"scan_id", scan.ID,
+		"type", scan.Type,
+	)
+
+	// Enqueue the task
+	if h.asynqClient != nil {
+		task, err := h.createScanTask(scan)
+		if err != nil {
+			h.logger.Error("failed to create task", "error", err)
+		} else if task != nil {
+			info, err := h.asynqClient.EnqueueContext(ctx, task)
+			if err != nil {
+				h.logger.Error("failed to enqueue task", "error", err)
+			} else {
+				h.logger.Info("enqueued scan task",
+					"scan_id", scan.ID,
+					"task_id", info.ID,
+				)
+				// Update scan with task ID
+				_ = h.db.Model(&scan).Update("task_id", info.ID)
+			}
+		}
+	}
+
+	// Calculate next run time
+	nextRun, err := util.NextCronTime(sched.CronExpr, time.Now())
+	if err != nil {
+		h.logger.Error("failed to calculate next run time",
+			"schedule_id", sched.ID,
+			"cron_expr", sched.CronExpr,
+			"error", err,
+		)
+		// Disable the schedule if cron expression is invalid
+		_ = h.db.Model(sched).Update("is_enabled", false)
+		return fmt.Errorf("invalid cron expression: %w", err)
+	}
+
+	// Update schedule with last run info and next run time
+	now := time.Now().Unix()
+	if err := h.db.Model(sched).Updates(map[string]interface{}{
+		"last_run_at":  now,
+		"last_scan_id": scan.ID,
+		"next_run_at":  nextRun.Unix(),
+	}).Error; err != nil {
+		return fmt.Errorf("updating schedule: %w", err)
+	}
+
+	return nil
+}
+
+// createScanTask creates an asynq task for a scan
+func (h *Handler) createScanTask(scan models.Scan) (*asynq.Task, error) {
+	switch scan.Type {
+	case models.ScanTypeDiscovery:
+		return NewAssetDiscoveryTask(AssetDiscoveryPayload{
+			ScanID:         scan.ID,
+			OrganizationID: scan.OrganizationID,
+			CredentialIDs:  scan.CredentialIDs,
+		})
+	case models.ScanTypePortScan:
+		return NewPortScanTask(PortScanPayload{
+			ScanID:         scan.ID,
+			OrganizationID: scan.OrganizationID,
+			AssetIDs:       scan.TargetAssetIDs,
+		})
+	case models.ScanTypeHTTPProbe:
+		return NewHTTPProbeTask(HTTPProbePayload{
+			ScanID:         scan.ID,
+			OrganizationID: scan.OrganizationID,
+			AssetIDs:       scan.TargetAssetIDs,
+		})
+	case models.ScanTypeCrawl:
+		return NewCrawlTask(CrawlPayload{
+			ScanID:         scan.ID,
+			OrganizationID: scan.OrganizationID,
+			AssetIDs:       scan.TargetAssetIDs,
+		})
+	case models.ScanTypeVulnCheck:
+		return NewVulnCheckTask(VulnCheckPayload{
+			ScanID:         scan.ID,
+			OrganizationID: scan.OrganizationID,
+			AssetIDs:       scan.TargetAssetIDs,
+		})
+	default:
+		return nil, nil
+	}
 }
