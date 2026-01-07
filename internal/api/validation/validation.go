@@ -19,9 +19,6 @@ var (
 
 	// PortRangeRegex validates port range format like "1-1000" or "80,443,8080"
 	portRangeRegex = regexp.MustCompile(`^(\d+(-\d+)?)(,\d+(-\d+)?)*$`)
-
-	// CIDRRegex validates CIDR notation
-	cidrRegex = regexp.MustCompile(`^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$`)
 )
 
 // IsValidEmail checks if the string is a valid email format
