@@ -36,6 +36,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&models.Asset{},
 		&models.Scan{},
 		&models.Finding{},
+		&models.ScheduledScan{},
 	)
 	if err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
@@ -271,6 +272,31 @@ func TestContext(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// CreateTestSchedule creates a test scheduled scan
+func CreateTestSchedule(t *testing.T, db *gorm.DB, orgID uuid.UUID, name, cronExpr string, scanType models.ScanType) *models.ScheduledScan {
+	t.Helper()
+
+	now := time.Now()
+	schedule := &models.ScheduledScan{
+		Base: models.Base{
+			ID: uuid.New(),
+		},
+		OrganizationID: orgID,
+		Name:           name,
+		CronExpr:       cronExpr,
+		ScanType:       scanType,
+		IsEnabled:      true,
+		NextRunAt:      now.Add(time.Hour).Unix(),
+		Config:         "{}",
+	}
+
+	if err := db.Create(schedule).Error; err != nil {
+		t.Fatalf("failed to create test schedule: %v", err)
+	}
+
+	return schedule
 }
 
 // TestSetup holds all the common test dependencies
