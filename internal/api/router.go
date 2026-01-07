@@ -76,6 +76,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	assetHandler := handlers.NewAssetHandler(cfg.DB)
 	scanHandler := handlers.NewScanHandler(cfg.DB, cfg.AsynqClient)
 	findingHandler := handlers.NewFindingHandler(cfg.DB)
+	scheduleHandler := handlers.NewScheduleHandler(cfg.DB, cfg.AsynqClient)
 
 	// Health endpoints (no auth required)
 	r.Get("/health", healthHandler.Health)
@@ -133,6 +134,16 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Get("/{id}", findingHandler.Get)
 				r.Put("/{id}/status", findingHandler.UpdateStatus)
 			})
+
+			// Schedules endpoints
+			r.Route("/schedules", func(r chi.Router) {
+				r.Get("/", scheduleHandler.List)
+				r.Post("/", scheduleHandler.Create)
+				r.Get("/{id}", scheduleHandler.Get)
+				r.Put("/{id}", scheduleHandler.Update)
+				r.Delete("/{id}", scheduleHandler.Delete)
+				r.Post("/{id}/trigger", scheduleHandler.Trigger)
+			})
 		})
 	})
 
@@ -157,5 +168,5 @@ func NewRouter(cfg RouterConfig) *Router {
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
