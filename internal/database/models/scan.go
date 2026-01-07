@@ -15,12 +15,12 @@ const (
 type ScanType string
 
 const (
-	ScanTypeDiscovery   ScanType = "discovery"   // Asset discovery from cloud
-	ScanTypePortScan    ScanType = "port_scan"
-	ScanTypeHTTPProbe   ScanType = "http_probe"
-	ScanTypeCrawl       ScanType = "crawl"
-	ScanTypeVulnCheck   ScanType = "vuln_check"
-	ScanTypeFull        ScanType = "full" // All of the above
+	ScanTypeDiscovery ScanType = "discovery" // Asset discovery from cloud
+	ScanTypePortScan  ScanType = "port_scan"
+	ScanTypeHTTPProbe ScanType = "http_probe"
+	ScanTypeCrawl     ScanType = "crawl"
+	ScanTypeVulnCheck ScanType = "vuln_check"
+	ScanTypeFull      ScanType = "full" // All of the above
 )
 
 type Scan struct {
@@ -39,10 +39,10 @@ type Scan struct {
 	Error       string `json:"error,omitempty"`
 
 	// Stats
-	AssetsScanned  int `gorm:"default:0" json:"assets_scanned"`
-	FindingsCount  int `gorm:"default:0" json:"findings_count"`
-	PortsOpen      int `gorm:"default:0" json:"ports_open"`
-	ServicesFound  int `gorm:"default:0" json:"services_found"`
+	AssetsScanned int `gorm:"default:0" json:"assets_scanned"`
+	FindingsCount int `gorm:"default:0" json:"findings_count"`
+	PortsOpen     int `gorm:"default:0" json:"ports_open"`
+	ServicesFound int `gorm:"default:0" json:"services_found"`
 
 	// Configuration (JSON)
 	Config string `gorm:"type:jsonb;default:'{}'" json:"config,omitempty"`
