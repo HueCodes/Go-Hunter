@@ -28,12 +28,12 @@ import (
 type S3CheckType string
 
 const (
-	CheckTypePublicACL          S3CheckType = "public_acl"
-	CheckTypePublicPolicy       S3CheckType = "public_bucket_policy"
-	CheckTypePublicAccessBlock  S3CheckType = "public_access_block"
-	CheckTypeBucketVersioning   S3CheckType = "bucket_versioning"
-	CheckTypeServerEncryption   S3CheckType = "server_encryption"
-	CheckTypeBucketLogging      S3CheckType = "bucket_logging"
+	CheckTypePublicACL         S3CheckType = "public_acl"
+	CheckTypePublicPolicy      S3CheckType = "public_bucket_policy"
+	CheckTypePublicAccessBlock S3CheckType = "public_access_block"
+	CheckTypeBucketVersioning  S3CheckType = "bucket_versioning"
+	CheckTypeServerEncryption  S3CheckType = "server_encryption"
+	CheckTypeBucketLogging     S3CheckType = "bucket_logging"
 )
 
 // S3Checker performs security checks on S3 buckets
@@ -444,12 +444,12 @@ func (c *S3Checker) checkPublicAccessBlock(ctx context.Context, client *s3.Clien
 				Description: fmt.Sprintf("The S3 bucket '%s' does not have Block Public Access settings configured. This means the bucket could potentially be made public through ACLs or bucket policies.", bucketName),
 				Severity:    models.SeverityHigh,
 				Evidence: map[string]interface{}{
-					"bucket_name":               bucketName,
-					"public_access_block":       "not_configured",
-					"block_public_acls":         false,
-					"ignore_public_acls":        false,
-					"block_public_policy":       false,
-					"restrict_public_buckets":   false,
+					"bucket_name":             bucketName,
+					"public_access_block":     "not_configured",
+					"block_public_acls":       false,
+					"ignore_public_acls":      false,
+					"block_public_policy":     false,
+					"restrict_public_buckets": false,
 				},
 				Remediation: "Enable S3 Block Public Access settings at both the bucket and account level. Configure all four settings: BlockPublicAcls, IgnorePublicAcls, BlockPublicPolicy, and RestrictPublicBuckets.",
 				References: []string{
@@ -583,9 +583,9 @@ func (c *S3Checker) checkServerEncryption(ctx context.Context, client *s3.Client
 				Description: fmt.Sprintf("The S3 bucket '%s' does not have default server-side encryption enabled. Objects uploaded without explicit encryption will be stored unencrypted, which may violate data protection requirements.", bucketName),
 				Severity:    models.SeverityMedium,
 				Evidence: map[string]interface{}{
-					"bucket_name":    bucketName,
-					"encryption":     "not_configured",
-					"sse_algorithm":  "none",
+					"bucket_name":   bucketName,
+					"encryption":    "not_configured",
+					"sse_algorithm": "none",
 				},
 				Remediation: "Enable default encryption using either SSE-S3 (AES-256) or SSE-KMS with a customer managed key. SSE-KMS provides additional control and audit capabilities through AWS CloudTrail.",
 				References: []string{
