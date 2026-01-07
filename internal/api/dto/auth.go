@@ -71,8 +71,8 @@ func (r LoginRequest) Validate() map[string]string {
 }
 
 type AuthResponse struct {
-	Token string   `json:"token"`
-	User  UserDTO  `json:"user"`
+	Token string  `json:"token"`
+	User  UserDTO `json:"user"`
 }
 
 type UserDTO struct {
