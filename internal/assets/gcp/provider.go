@@ -2,7 +2,6 @@ package gcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -170,11 +169,11 @@ func (p *Provider) discoverCompute(ctx context.Context, project string) ([]types
 
 		for _, instance := range resp.Value.Instances {
 			metadata := map[string]string{
-				"project":       project,
-				"name":          instance.GetName(),
-				"zone":          instance.GetZone(),
-				"machine_type":  instance.GetMachineType(),
-				"status":        instance.GetStatus(),
+				"project":      project,
+				"name":         instance.GetName(),
+				"zone":         instance.GetZone(),
+				"machine_type": instance.GetMachineType(),
+				"status":       instance.GetStatus(),
 			}
 
 			// Add external IPs
@@ -318,9 +317,9 @@ func (p *Provider) discoverDNS(ctx context.Context, project string) ([]types.Dis
 			Value:  dnsName,
 			Source: "gcp:dns",
 			Metadata: map[string]string{
-				"project":     project,
-				"zone_name":   zone.Name,
-				"visibility":  zone.Visibility,
+				"project":    project,
+				"zone_name":  zone.Name,
+				"visibility": zone.Visibility,
 			},
 		})
 
@@ -397,15 +396,4 @@ func copyMetadata(m map[string]string) map[string]string {
 		c[k] = v
 	}
 	return c
-}
-
-// parseServiceAccountProject extracts project ID from service account JSON
-func parseServiceAccountProject(jsonData string) string {
-	var sa struct {
-		ProjectID string `json:"project_id"`
-	}
-	if err := json.Unmarshal([]byte(jsonData), &sa); err != nil {
-		return ""
-	}
-	return sa.ProjectID
 }
