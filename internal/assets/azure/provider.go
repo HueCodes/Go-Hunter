@@ -265,11 +265,11 @@ func (p *Provider) discoverStorage(ctx context.Context, subscriptionID string) (
 		for _, account := range page.Value {
 			accountName := ptrToString(account.Name)
 			metadata := map[string]string{
-				"subscription":   subscriptionID,
-				"name":           accountName,
-				"location":       ptrToString(account.Location),
-				"kind":           string(ptrValue(account.Kind)),
-				"sku":            string(ptrValue(account.SKU.Name)),
+				"subscription": subscriptionID,
+				"name":         accountName,
+				"location":     ptrToString(account.Location),
+				"kind":         string(ptrValue(account.Kind)),
+				"sku":          string(ptrValue(account.SKU.Name)),
 			}
 
 			// Check public access settings
