@@ -40,12 +40,12 @@ type WebCrawlerConfig struct {
 
 // CrawlResult represents discovered items from crawling
 type CrawlResult struct {
-	BaseURL     string
-	Links       []DiscoveredLink
-	Forms       []DiscoveredForm
-	Scripts     []DiscoveredScript
-	Parameters  []DiscoveredParameter
-	Endpoints   []DiscoveredEndpoint
+	BaseURL      string
+	Links        []DiscoveredLink
+	Forms        []DiscoveredForm
+	Scripts      []DiscoveredScript
+	Parameters   []DiscoveredParameter
+	Endpoints    []DiscoveredEndpoint
 	PagesCrawled int
 }
 
@@ -58,10 +58,10 @@ type DiscoveredLink struct {
 
 // DiscoveredForm represents a discovered HTML form
 type DiscoveredForm struct {
-	Action   string
-	Method   string
-	Inputs   []FormInput
-	PageURL  string
+	Action  string
+	Method  string
+	Inputs  []FormInput
+	PageURL string
 }
 
 // FormInput represents a form input field
@@ -81,17 +81,17 @@ type DiscoveredScript struct {
 
 // DiscoveredParameter represents a URL parameter
 type DiscoveredParameter struct {
-	URL       string
-	Name      string
-	Value     string
-	PageURL   string
+	URL     string
+	Name    string
+	Value   string
+	PageURL string
 }
 
 // DiscoveredEndpoint represents a discovered API endpoint
 type DiscoveredEndpoint struct {
-	URL       string
-	Method    string
-	Source    string // Where it was discovered (form, link, js)
+	URL    string
+	Method string
+	Source string // Where it was discovered (form, link, js)
 }
 
 // NewWebCrawler creates a new web crawler instance
@@ -618,11 +618,11 @@ func (c *WebCrawler) ResultsToFindings(result *CrawlResult, assetID, scanID, org
 
 	// Create summary finding
 	summaryEvidence := map[string]interface{}{
-		"base_url":       result.BaseURL,
-		"pages_crawled":  result.PagesCrawled,
-		"links_found":    len(result.Links),
-		"forms_found":    len(result.Forms),
-		"scripts_found":  len(result.Scripts),
+		"base_url":        result.BaseURL,
+		"pages_crawled":   result.PagesCrawled,
+		"links_found":     len(result.Links),
+		"forms_found":     len(result.Forms),
+		"scripts_found":   len(result.Scripts),
 		"endpoints_found": len(result.Endpoints),
 	}
 	summaryJSON, _ := json.Marshal(summaryEvidence)
