@@ -134,7 +134,7 @@ func RateLimit(requests int, windowSeconds int) func(http.Handler) http.Handler 
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
 
 			if !allowed {
-				w.Header().Set("Retry-After", strconv.FormatInt(int64(resetTime.Sub(time.Now()).Seconds())+1, 10))
+				w.Header().Set("Retry-After", strconv.FormatInt(int64(time.Until(resetTime).Seconds())+1, 10))
 				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
@@ -193,7 +193,7 @@ func RateLimitByUser(requests int, windowSeconds int) func(http.Handler) http.Ha
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
 
 			if !allowed {
-				w.Header().Set("Retry-After", strconv.FormatInt(int64(resetTime.Sub(time.Now()).Seconds())+1, 10))
+				w.Header().Set("Retry-After", strconv.FormatInt(int64(time.Until(resetTime).Seconds())+1, 10))
 				http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 				return
 			}
