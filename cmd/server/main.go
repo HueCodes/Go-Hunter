@@ -106,17 +106,17 @@ func main() {
 
 	// Create router
 	router := api.NewRouter(api.RouterConfig{
-		DB:             db,
-		Redis:          redisClient,
-		Logger:         logger,
-		JWTService:     jwtService,
-		AuthService:    authService,
-		Encryptor:      encryptor,
-		Templates:      templates,
-		StaticFS:       staticFS,
-		AsynqClient:    asynqClient,
-		RateLimitReqs:  cfg.RateLimit.Requests,
-		RateLimitSecs:  cfg.RateLimit.WindowSeconds,
+		DB:            db,
+		Redis:         redisClient,
+		Logger:        logger,
+		JWTService:    jwtService,
+		AuthService:   authService,
+		Encryptor:     encryptor,
+		Templates:     templates,
+		StaticFS:      staticFS,
+		AsynqClient:   asynqClient,
+		RateLimitReqs: cfg.RateLimit.Requests,
+		RateLimitSecs: cfg.RateLimit.WindowSeconds,
 	})
 
 	// Create HTTP server
