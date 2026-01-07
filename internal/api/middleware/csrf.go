@@ -10,11 +10,11 @@ import (
 )
 
 const (
-	csrfTokenLength  = 32
-	csrfCookieName   = "csrf_token"
-	csrfHeaderName   = "X-CSRF-Token"
-	csrfFormField    = "csrf_token"
-	csrfTokenExpiry  = 24 * time.Hour
+	csrfTokenLength = 32
+	csrfCookieName  = "csrf_token"
+	csrfHeaderName  = "X-CSRF-Token"
+	csrfFormField   = "csrf_token"
+	csrfTokenExpiry = 24 * time.Hour
 )
 
 // CSRFToken represents a CSRF token with expiry
@@ -111,9 +111,9 @@ func CSRF(store *CSRFStore) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip CSRF check for safe methods
 			if r.Method == http.MethodGet ||
-			   r.Method == http.MethodHead ||
-			   r.Method == http.MethodOptions ||
-			   r.Method == http.MethodTrace {
+				r.Method == http.MethodHead ||
+				r.Method == http.MethodOptions ||
+				r.Method == http.MethodTrace {
 				// For GET requests, ensure CSRF token is set in cookie
 				ensureCSRFCookie(w, r, store)
 				next.ServeHTTP(w, r)
