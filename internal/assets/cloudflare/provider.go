@@ -147,10 +147,10 @@ func (p *Provider) discoverDNSRecords(ctx context.Context, zone cloudflare.Zone)
 		Value:  zone.Name,
 		Source: "cloudflare:zone",
 		Metadata: map[string]string{
-			"zone_id":     zone.ID,
-			"status":      zone.Status,
+			"zone_id":      zone.ID,
+			"status":       zone.Status,
 			"name_servers": joinStrings(zone.NameServers, ","),
-			"plan":        zone.Plan.Name,
+			"plan":         zone.Plan.Name,
 		},
 	})
 
