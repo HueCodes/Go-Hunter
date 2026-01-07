@@ -14,6 +14,7 @@ const (
 	TypeHTTPProbe      = "scan:http_probe"
 	TypeCrawl          = "scan:crawl"
 	TypeVulnCheck      = "scan:vuln_check"
+	TypeSchedulerTick  = "scheduler:tick"
 )
 
 // AssetDiscoveryPayload contains the data for an asset discovery task
@@ -96,4 +97,11 @@ func NewVulnCheckTask(payload VulnCheckPayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeVulnCheck, data), nil
+}
+
+// SchedulerTickPayload is empty - the scheduler checks all organizations
+type SchedulerTickPayload struct{}
+
+func NewSchedulerTickTask() *asynq.Task {
+	return asynq.NewTask(TypeSchedulerTick, nil)
 }
