@@ -15,11 +15,11 @@ const (
 type FindingStatus string
 
 const (
-	FindingStatusOpen       FindingStatus = "open"
-	FindingStatusAcknowledged FindingStatus = "acknowledged"
-	FindingStatusFixed      FindingStatus = "fixed"
+	FindingStatusOpen          FindingStatus = "open"
+	FindingStatusAcknowledged  FindingStatus = "acknowledged"
+	FindingStatusFixed         FindingStatus = "fixed"
 	FindingStatusFalsePositive FindingStatus = "false_positive"
-	FindingStatusAccepted   FindingStatus = "accepted" // Risk accepted
+	FindingStatusAccepted      FindingStatus = "accepted" // Risk accepted
 )
 
 type Finding struct {
@@ -35,7 +35,7 @@ type Finding struct {
 	Status      FindingStatus `gorm:"not null;index;default:'open'" json:"status"`
 
 	// Categorization
-	Type     string `gorm:"index" json:"type"`               // open_port, exposed_bucket, xss, etc.
+	Type     string `gorm:"index" json:"type"`  // open_port, exposed_bucket, xss, etc.
 	Category string `json:"category,omitempty"` // network, cloud, web, etc.
 
 	// Evidence
