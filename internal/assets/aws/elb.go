@@ -51,11 +51,11 @@ func (p *Provider) discoverClassicELB(ctx context.Context, cfg aws.Config, regio
 		dnsName := aws.ToString(lb.DNSName)
 
 		metadata := map[string]string{
-			"name":    lbName,
-			"region":  region,
-			"type":    "classic",
-			"scheme":  aws.ToString(lb.Scheme),
-			"vpc_id":  aws.ToString(lb.VPCId),
+			"name":   lbName,
+			"region": region,
+			"type":   "classic",
+			"scheme": aws.ToString(lb.Scheme),
+			"vpc_id": aws.ToString(lb.VPCId),
 		}
 
 		// Add listener ports
