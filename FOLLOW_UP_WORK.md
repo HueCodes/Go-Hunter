@@ -2,23 +2,39 @@
 
 This document outlines remaining work items for the Go-Hunter project, organized by priority and category.
 
+## Completed Items
+
+### Scan Scheduling (Completed)
+- Cron-based recurring scans with full CRUD API
+- Database model: `internal/database/models/scheduled_scan.go`
+- Migration: `migrations/000002_scheduled_scans.up.sql`
+- API handler: `internal/api/handlers/schedules.go`
+- Scheduler tick handler: `internal/tasks/handlers.go` (HandleSchedulerTick)
+- Cron utilities: `pkg/util/cron.go`
+- Routes: `/api/v1/schedules` (GET, POST), `/api/v1/schedules/{id}` (GET, PUT, DELETE), `/api/v1/schedules/{id}/trigger` (POST)
+- Comprehensive test coverage: `internal/api/handlers/schedules_test.go`
+
+### Code Quality - Service Interfaces (Completed)
+- Auth interfaces: `internal/auth/interfaces.go` (Authenticator, TokenService)
+- Asset interfaces: `internal/assets/interfaces.go` (CredentialManager, AssetDiscoverer, AssetService)
+- Scanner interfaces: `internal/scanner/interfaces.go` (PortScannerInterface, HTTPProberInterface, WebCrawlerInterface, S3CheckerInterface)
+
+### Code Quality - golangci-lint (Completed)
+- Configuration: `.golangci.yml`
+- All lint issues fixed
+
+### Code Quality - Scanner Tests (Completed)
+- Port scanner tests: `internal/scanner/port_scanner_test.go` (20+ test cases)
+- HTTP prober tests: `internal/scanner/http_prober_test.go` (20+ test cases)
+- S3 checker tests: `internal/scanner/s3_checker_test.go` (6+ test cases)
+
+---
+
 ## Features to Add
 
 ### High Priority
 
-#### 1. Scan Scheduling
-- Add cron-based recurring scans
-- Store schedule in database with new `scan_schedules` table
-- Use asynq periodic tasks for execution
-- Support daily/weekly/monthly options
-- Allow users to enable/disable schedules
-
-**Implementation notes:**
-- Create `internal/scheduler/scheduler.go`
-- Add `scan_schedules` table with fields: id, org_id, scan_type, cron_expression, enabled, last_run, next_run
-- Register periodic task handler in worker
-
-#### 2. Webhooks/Notifications
+#### 1. Webhooks/Notifications
 - Notify on new critical findings
 - Support Slack, Discord, email, generic webhook
 - Add notification preferences per organization
@@ -100,54 +116,24 @@ This document outlines remaining work items for the Go-Hunter project, organized
 
 ## Code Quality Improvements
 
-### 1. Add golangci-lint Config
-Create `.golangci.yml` with appropriate linters:
-```yaml
-linters:
-  enable:
-    - gofmt
-    - govet
-    - errcheck
-    - staticcheck
-    - gosimple
-    - ineffassign
-    - unused
-    - misspell
-    - gosec
-```
-
-### 2. Replace Magic Strings with Enums
+### 1. Replace Magic Strings with Enums
 - Scan types should use typed constants
 - Asset types already use typed constants (good)
 - Finding severities already use typed constants (good)
 - Add scan status constants if not present
 
-### 3. Extract Handler Helper Methods
+### 2. Extract Handler Helper Methods
 - Large handlers in `scans.go` should be broken down
 - Create shared context extraction helper
 - Consolidate JSON response writing
 
-### 4. Increase Test Coverage
-- Add tests for all scanner implementations
-- Add integration tests with testcontainers
-- Target 60%+ coverage
-- Priority files:
-  - `internal/scanner/port_scanner.go`
-  - `internal/scanner/http_prober.go`
-  - `internal/scanner/web_crawler.go`
-  - `internal/api/middleware/ratelimit.go`
-
-### 5. Add Interfaces for Services
-- Define interfaces for AssetService, ScanService, etc.
-- Enable proper mocking in tests
-- Example:
-```go
-type AssetServiceInterface interface {
-    CreateCredential(ctx context.Context, ...) (*models.CloudCredential, error)
-    DiscoverAssets(ctx context.Context, ...) ([]DiscoveredAsset, error)
-    // ...
-}
-```
+### 3. Increase Test Coverage (Partially Done)
+- Scanner tests completed (port scanner, HTTP prober, S3 checker)
+- Still needed:
+  - `internal/scanner/web_crawler.go` tests
+  - `internal/api/middleware/ratelimit.go` tests
+  - Integration tests with testcontainers
+  - Target 60%+ coverage
 
 ## Database Improvements
 
@@ -231,8 +217,8 @@ err := db.Transaction(func(tx *gorm.DB) error {
 
 ## Priority Order Recommendation
 
-1. Scan Scheduling (high user value)
+1. ~~Scan Scheduling~~ (COMPLETED)
 2. Export Functionality (commonly requested)
 3. Audit Logging (security requirement)
-4. Test Coverage (code quality)
+4. Web Crawler Tests (code quality - remaining scanner)
 5. Webhooks/Notifications (automation enabler)
