@@ -541,8 +541,8 @@ func (h *Handler) runS3BucketChecks(ctx context.Context, payload VulnCheckPayloa
 	// Group buckets by credential for efficient processing
 	credentialBuckets := make(map[uuid.UUID][]models.Asset)
 	for _, asset := range bucketAssets {
-		if asset.CredentialID != uuid.Nil {
-			credentialBuckets[asset.CredentialID] = append(credentialBuckets[asset.CredentialID], asset)
+		if asset.CredentialID != nil && *asset.CredentialID != uuid.Nil {
+			credentialBuckets[*asset.CredentialID] = append(credentialBuckets[*asset.CredentialID], asset)
 		}
 	}
 

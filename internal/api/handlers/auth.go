@@ -45,6 +45,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set cookie for web dashboard (same as login)
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    resp.Token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400, // 24 hours
+	})
+
 	writeJSON(w, http.StatusCreated, dto.AuthResponse{
 		Token: resp.Token,
 		User: dto.UserDTO{
@@ -93,7 +104,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Value:    resp.Token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   false, // Set to true in production with HTTPS
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400, // 24 hours
 	})

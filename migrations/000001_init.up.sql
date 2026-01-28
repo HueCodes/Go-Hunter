@@ -131,7 +131,7 @@ CREATE TABLE findings (
     service VARCHAR(100),
     banner TEXT,
     remediation TEXT,
-    references JSONB DEFAULT '[]',
+    "references" JSONB DEFAULT '[]',
     first_seen_at BIGINT,
     last_seen_at BIGINT,
     resolved_at BIGINT,

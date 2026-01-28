@@ -48,14 +48,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Run auto migrations in development
-	if cfg.Server.IsDevelopment() {
-		logger.Info("running database migrations")
-		if err := database.AutoMigrate(db); err != nil {
-			logger.Error("failed to run migrations", "error", err)
-			os.Exit(1)
-		}
-	}
+	// Note: Database migrations are handled by golang-migrate (make db-migrate)
+	// GORM AutoMigrate is disabled to avoid conflicts with SQL migrations
+	_ = cfg.Server.IsDevelopment() // Keep this to avoid unused import if needed
 
 	// Connect to Redis
 	redisClient := redis.NewClient(&redis.Options{

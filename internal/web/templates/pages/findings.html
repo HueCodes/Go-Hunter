@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Findings - Go-Hunter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="h-full">
+<!-- Mobile header -->
+<div class="lg:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 h-14 flex items-center justify-between px-4">
+    <div class="flex items-center">
+        <button onclick="document.getElementById('mobile-sidebar').classList.toggle('-translate-x-full')" class="text-white p-2 -ml-2">
+            <i class="fas fa-bars text-lg"></i>
+        </button>
+        <span class="ml-2 text-white font-bold"><i class="fas fa-crosshairs mr-2 text-indigo-500"></i>Go-Hunter</span>
+    </div>
+    <span class="text-sm text-slate-400">{{.User.Email}}</span>
+</div>
+<div class="min-h-full">
+    <!-- Sidebar -->
+    <div id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 flex-col bg-slate-900 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-in-out lg:flex">
+        <div class="flex h-16 shrink-0 items-center px-4 border-b border-slate-800">
+            <span class="text-white text-xl font-bold"><i class="fas fa-crosshairs mr-2 text-indigo-500"></i>Go-Hunter</span>
+        </div>
+        <nav class="flex flex-1 flex-col px-3 py-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="/dashboard" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-chart-line mr-3 text-slate-400"></i>Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="/assets" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-server mr-3 text-slate-400"></i>Assets
+                    </a>
+                </li>
+                <li>
+                    <a href="/findings" class="bg-slate-800 text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-shield-halved mr-3 text-indigo-400"></i>Findings
+                    </a>
+                </li>
+                <li>
+                    <a href="/scans" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-radar mr-3 text-slate-400"></i>Scans
+                    </a>
+                </li>
+            </ul>
+            <div class="mt-auto pt-4 border-t border-slate-800">
+                <a href="/logout" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                    <i class="fas fa-right-from-bracket mr-3"></i>Logout
+                </a>
+            </div>
+        </nav>
+    </div>
+    <!-- Mobile overlay -->
+    <div onclick="document.getElementById('mobile-sidebar').classList.add('-translate-x-full')"
+         class="fixed inset-0 bg-black/50 z-30 lg:hidden"
+         id="mobile-overlay"
+         style="display:none"></div>
+    <script>
+    const sidebar = document.getElementById('mobile-sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+    const observer = new MutationObserver(() => {
+        overlay.style.display = sidebar.classList.contains('-translate-x-full') ? 'none' : 'block';
+    });
+    observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    </script>
+
+    <!-- Main content -->
+    <div class="lg:pl-64 pt-14 lg:pt-0">
+        <!-- Top bar -->
+        <div class="sticky top-0 z-10 flex h-16 shrink-0 bg-white shadow-sm border-b">
+            <div class="flex flex-1 justify-between px-6">
+                <div class="flex flex-1 items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">Findings</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button class="inline-flex items-center px-4 py-2 bg-white border hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg transition-colors">
+                        <i class="fas fa-download mr-2"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page content -->
+        <main class="py-8 px-6">
+            <!-- Severity Stats -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-5 mb-8">
+                <div class="bg-white rounded-xl border p-4 flex items-center">
+                    <div class="bg-gray-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-list text-gray-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-gray-900">{{.Stats.Total}}</div>
+                        <div class="text-xs text-gray-500">Total Open</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center border-l-4 border-l-red-500">
+                    <div class="bg-red-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-circle-exclamation text-red-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-red-600">{{.Stats.Critical}}</div>
+                        <div class="text-xs text-gray-500">Critical</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center border-l-4 border-l-orange-500">
+                    <div class="bg-orange-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-triangle-exclamation text-orange-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-orange-600">{{.Stats.High}}</div>
+                        <div class="text-xs text-gray-500">High</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center border-l-4 border-l-yellow-500">
+                    <div class="bg-yellow-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-exclamation text-yellow-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-yellow-600">{{.Stats.Medium}}</div>
+                        <div class="text-xs text-gray-500">Medium</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center border-l-4 border-l-blue-500">
+                    <div class="bg-blue-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-info-circle text-blue-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-600">{{.Stats.Low}}</div>
+                        <div class="text-xs text-gray-500">Low</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Findings Table -->
+            <div class="bg-white shadow-sm rounded-xl border overflow-hidden">
+                <div class="px-6 py-4 border-b flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">All Findings</h2>
+                    <div class="flex items-center gap-2">
+                        <input type="text" placeholder="Search findings..." class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <select class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">All Severities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                        <select class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">All Status</option>
+                            <option value="open">Open</option>
+                            <option value="acknowledged">Acknowledged</option>
+                            <option value="fixed">Fixed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Severity</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Finding</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asset</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        {{range .Findings}}
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {{if eq .Severity "critical"}}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-red-100 text-red-800">
+                                    <i class="fas fa-circle-exclamation mr-1.5"></i>CRITICAL
+                                </span>
+                                {{else if eq .Severity "high"}}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-orange-100 text-orange-800">
+                                    <i class="fas fa-triangle-exclamation mr-1.5"></i>HIGH
+                                </span>
+                                {{else if eq .Severity "medium"}}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-yellow-100 text-yellow-800">
+                                    <i class="fas fa-exclamation mr-1.5"></i>MEDIUM
+                                </span>
+                                {{else if eq .Severity "low"}}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-100 text-blue-800">
+                                    <i class="fas fa-info-circle mr-1.5"></i>LOW
+                                </span>
+                                {{else}}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-800">
+                                    <i class="fas fa-info mr-1.5"></i>INFO
+                                </span>
+                                {{end}}
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-medium text-gray-900">{{.Title}}</div>
+                                {{if .Description}}
+                                <div class="text-sm text-gray-500 truncate max-w-md">{{.Description}}</div>
+                                {{end}}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm text-gray-600">{{.AssetValue}}</span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                {{if eq .Status "open"}}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Open</span>
+                                {{else if eq .Status "acknowledged"}}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Acknowledged</span>
+                                {{else if eq .Status "fixed"}}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Fixed</span>
+                                {{else}}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{{.Status}}</span>
+                                {{end}}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+                                <button class="text-indigo-600 hover:text-indigo-900 mr-3"><i class="fas fa-eye"></i></button>
+                                <button class="text-green-600 hover:text-green-900 mr-3"><i class="fas fa-check"></i></button>
+                                <button class="text-gray-400 hover:text-gray-600"><i class="fas fa-ellipsis-v"></i></button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table></div>
+            </div>
+        </main>
+    </div>
+</div>
+</body>
+</html>

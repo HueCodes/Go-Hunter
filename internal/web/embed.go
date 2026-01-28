@@ -13,41 +13,38 @@ var TemplatesFS embed.FS
 var StaticFS embed.FS
 
 // LoadTemplates parses all templates from the embedded filesystem
+// Each page gets its own template set with the base layout
 func LoadTemplates() (*template.Template, error) {
+	// Read base layout
+	baseContent, err := fs.ReadFile(TemplatesFS, "templates/layouts/base.html")
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a template collection
 	tmpl := template.New("")
 
-	// Parse layout templates
-	entries, err := fs.ReadDir(TemplatesFS, "templates/layouts")
+	// Parse page templates - each page is a separate template with the base included
+	entries, err := fs.ReadDir(TemplatesFS, "templates/pages")
 	if err != nil {
 		return nil, err
 	}
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
-			content, err := fs.ReadFile(TemplatesFS, "templates/layouts/"+entry.Name())
+			pageContent, err := fs.ReadFile(TemplatesFS, "templates/pages/"+entry.Name())
 			if err != nil {
 				return nil, err
 			}
-			_, err = tmpl.Parse(string(content))
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
 
-	// Parse page templates
-	entries, err = fs.ReadDir(TemplatesFS, "templates/pages")
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			content, err := fs.ReadFile(TemplatesFS, "templates/pages/"+entry.Name())
+			// Create a new template for this page that includes base + page content
+			// Parse base first, then page content which overrides the blocks
+			pageTmpl := tmpl.New(entry.Name())
+			_, err = pageTmpl.Parse(string(baseContent))
 			if err != nil {
 				return nil, err
 			}
-			_, err = tmpl.New(entry.Name()).Parse(string(content))
+			_, err = pageTmpl.Parse(string(pageContent))
 			if err != nil {
 				return nil, err
 			}

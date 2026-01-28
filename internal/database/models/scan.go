@@ -30,8 +30,8 @@ type Scan struct {
 	Status         ScanStatus `gorm:"not null;index;default:'pending'" json:"status"`
 
 	// Scope
-	TargetAssetIDs []uuid.UUID `gorm:"type:uuid[];serializer:json" json:"target_asset_ids,omitempty"`
-	CredentialIDs  []uuid.UUID `gorm:"type:uuid[];serializer:json" json:"credential_ids,omitempty"`
+	TargetAssetIDs UUIDArray `gorm:"type:uuid[]" json:"target_asset_ids,omitempty"`
+	CredentialIDs  UUIDArray `gorm:"type:uuid[]" json:"credential_ids,omitempty"`
 
 	// Execution
 	StartedAt   int64  `json:"started_at,omitempty"`

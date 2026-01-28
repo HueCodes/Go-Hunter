@@ -149,11 +149,16 @@ func NewRouter(cfg RouterConfig) *Router {
 
 	// Web dashboard routes
 	r.Get("/login", dashboardHandler.Login)
+	r.Post("/login", dashboardHandler.LoginPost)
+	r.Get("/logout", dashboardHandler.Logout)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTService))
 		r.Get("/", dashboardHandler.Index)
 		r.Get("/dashboard", dashboardHandler.Index)
+		r.Get("/assets", dashboardHandler.Assets)
+		r.Get("/findings", dashboardHandler.Findings)
+		r.Get("/scans", dashboardHandler.Scans)
 	})
 
 	// Static files

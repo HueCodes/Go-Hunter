@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scans - Go-Hunter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="h-full">
+<!-- Mobile header -->
+<div class="lg:hidden fixed top-0 left-0 right-0 z-30 bg-slate-900 h-14 flex items-center justify-between px-4">
+    <div class="flex items-center">
+        <button onclick="document.getElementById('mobile-sidebar').classList.toggle('-translate-x-full')" class="text-white p-2 -ml-2">
+            <i class="fas fa-bars text-lg"></i>
+        </button>
+        <span class="ml-2 text-white font-bold"><i class="fas fa-crosshairs mr-2 text-indigo-500"></i>Go-Hunter</span>
+    </div>
+    <span class="text-sm text-slate-400">{{.User.Email}}</span>
+</div>
+<div class="min-h-full">
+    <!-- Sidebar -->
+    <div id="mobile-sidebar" class="fixed inset-y-0 left-0 z-40 w-64 flex-col bg-slate-900 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-in-out lg:flex">
+        <div class="flex h-16 shrink-0 items-center px-4 border-b border-slate-800">
+            <span class="text-white text-xl font-bold"><i class="fas fa-crosshairs mr-2 text-indigo-500"></i>Go-Hunter</span>
+        </div>
+        <nav class="flex flex-1 flex-col px-3 py-4">
+            <ul class="space-y-1">
+                <li>
+                    <a href="/dashboard" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-chart-line mr-3 text-slate-400"></i>Dashboard
+                    </a>
+                </li>
+                <li>
+                    <a href="/assets" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-server mr-3 text-slate-400"></i>Assets
+                    </a>
+                </li>
+                <li>
+                    <a href="/findings" class="text-slate-300 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-shield-halved mr-3 text-slate-400"></i>Findings
+                    </a>
+                </li>
+                <li>
+                    <a href="/scans" class="bg-slate-800 text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                        <i class="fas fa-radar mr-3 text-indigo-400"></i>Scans
+                    </a>
+                </li>
+            </ul>
+            <div class="mt-auto pt-4 border-t border-slate-800">
+                <a href="/logout" class="text-slate-400 hover:bg-slate-800 hover:text-white group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium">
+                    <i class="fas fa-right-from-bracket mr-3"></i>Logout
+                </a>
+            </div>
+        </nav>
+    </div>
+    <!-- Mobile overlay -->
+    <div onclick="document.getElementById('mobile-sidebar').classList.add('-translate-x-full')"
+         class="fixed inset-0 bg-black/50 z-30 lg:hidden"
+         id="mobile-overlay"
+         style="display:none"></div>
+    <script>
+    const sidebar = document.getElementById('mobile-sidebar');
+    const overlay = document.getElementById('mobile-overlay');
+    const observer = new MutationObserver(() => {
+        overlay.style.display = sidebar.classList.contains('-translate-x-full') ? 'none' : 'block';
+    });
+    observer.observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    </script>
+
+    <!-- Main content -->
+    <div class="lg:pl-64 pt-14 lg:pt-0">
+        <!-- Top bar -->
+        <div class="sticky top-0 z-10 flex h-16 shrink-0 bg-white shadow-sm border-b">
+            <div class="flex flex-1 justify-between px-6">
+                <div class="flex flex-1 items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">Scans</h1>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button onclick="document.getElementById('scan-modal').classList.remove('hidden')"
+                        class="inline-flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors">
+                        <i class="fas fa-play mr-2"></i>New Scan
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page content -->
+        <main class="py-8 px-6">
+            <!-- Stats -->
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-4 mb-8">
+                <div class="bg-white rounded-xl border p-4 flex items-center">
+                    <div class="bg-indigo-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-list text-indigo-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-gray-900">{{.Stats.Total}}</div>
+                        <div class="text-xs text-gray-500">Total Scans</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center">
+                    <div class="bg-blue-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-spinner fa-spin text-blue-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-blue-600">{{.Stats.Running}}</div>
+                        <div class="text-xs text-gray-500">Running</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center">
+                    <div class="bg-green-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-check-circle text-green-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-green-600">{{.Stats.Completed}}</div>
+                        <div class="text-xs text-gray-500">Completed</div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl border p-4 flex items-center">
+                    <div class="bg-red-100 rounded-lg p-2 mr-3">
+                        <i class="fas fa-times-circle text-red-600"></i>
+                    </div>
+                    <div>
+                        <div class="text-2xl font-bold text-red-600">{{.Stats.Failed}}</div>
+                        <div class="text-xs text-gray-500">Failed</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scans Grid -->
+            <div class="bg-white shadow-sm rounded-xl border overflow-hidden">
+                <div class="px-6 py-4 border-b flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-gray-900">Scan History</h2>
+                    <div class="flex items-center gap-2">
+                        <select class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">All Types</option>
+                            <option value="full">Full Scan</option>
+                            <option value="port_scan">Port Scan</option>
+                            <option value="discovery">Discovery</option>
+                        </select>
+                        <select class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                            <option value="">All Status</option>
+                            <option value="running">Running</option>
+                            <option value="completed">Completed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="divide-y divide-gray-200">
+                    {{range .Scans}}
+                    <div class="p-6 hover:bg-gray-50">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                {{if eq .Status "running"}}
+                                <div class="flex-shrink-0 bg-blue-100 rounded-lg p-3 mr-4">
+                                    <i class="fas fa-spinner fa-spin text-blue-600 text-xl"></i>
+                                </div>
+                                {{else if eq .Status "pending"}}
+                                <div class="flex-shrink-0 bg-yellow-100 rounded-lg p-3 mr-4">
+                                    <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                                </div>
+                                {{else if eq .Status "completed"}}
+                                <div class="flex-shrink-0 bg-green-100 rounded-lg p-3 mr-4">
+                                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                                </div>
+                                {{else if eq .Status "failed"}}
+                                <div class="flex-shrink-0 bg-red-100 rounded-lg p-3 mr-4">
+                                    <i class="fas fa-times-circle text-red-600 text-xl"></i>
+                                </div>
+                                {{else}}
+                                <div class="flex-shrink-0 bg-gray-100 rounded-lg p-3 mr-4">
+                                    <i class="fas fa-radar text-gray-600 text-xl"></i>
+                                </div>
+                                {{end}}
+                                <div>
+                                    <div class="flex items-center">
+                                        <span class="font-semibold text-gray-900 capitalize">{{.Type}} Scan</span>
+                                        {{if eq .Status "running"}}
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <span class="w-1.5 h-1.5 mr-1.5 bg-blue-500 rounded-full animate-pulse"></span>Running
+                                        </span>
+                                        {{else if eq .Status "pending"}}
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>
+                                        {{else if eq .Status "completed"}}
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Completed</span>
+                                        {{else if eq .Status "failed"}}
+                                        <span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Failed</span>
+                                        {{end}}
+                                    </div>
+                                    <div class="mt-1 text-sm text-gray-500">
+                                        <span class="mr-4"><i class="fas fa-server mr-1"></i>{{.AssetsScanned}} assets</span>
+                                        <span class="mr-4"><i class="fas fa-bug mr-1"></i>{{.FindingsCount}} findings</span>
+                                        <span><i class="fas fa-door-open mr-1"></i>{{.PortsOpen}} open ports</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <div class="text-right text-sm text-gray-500">
+                                    {{if .StartedAt}}
+                                    <div>Started: {{call $.FormatTime .StartedAt}}</div>
+                                    {{end}}
+                                    {{if .CompletedAt}}
+                                    <div>Completed: {{call $.FormatTime .CompletedAt}}</div>
+                                    {{end}}
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><i class="fas fa-eye"></i></button>
+                                    {{if or (eq .Status "running") (eq .Status "pending")}}
+                                    <button class="p-2 text-red-600 hover:bg-red-50 rounded-lg"><i class="fas fa-stop"></i></button>
+                                    {{else}}
+                                    <button class="p-2 text-gray-400 hover:bg-gray-50 rounded-lg"><i class="fas fa-redo"></i></button>
+                                    {{end}}
+                                </div>
+                            </div>
+                        </div>
+                        {{if .Error}}
+                        <div class="mt-3 p-3 bg-red-50 rounded-lg text-sm text-red-700">
+                            <i class="fas fa-exclamation-triangle mr-2"></i>{{.Error}}
+                        </div>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<!-- New Scan Modal -->
+<div id="scan-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" onclick="document.getElementById('scan-modal').classList.add('hidden')"></div>
+    <div class="relative min-h-screen flex items-center justify-center p-4">
+        <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg transform transition-all">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900"><i class="fas fa-radar mr-2 text-indigo-600"></i>Start New Scan</h3>
+                <button onclick="document.getElementById('scan-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 p-1">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Scan Type</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="scan-type-option relative flex items-center p-4 border-2 border-indigo-500 bg-indigo-50 rounded-xl cursor-pointer">
+                            <input type="radio" name="scan_type" value="full" checked class="sr-only">
+                            <i class="fas fa-expand text-indigo-600 text-lg mr-3"></i>
+                            <div>
+                                <div class="font-medium text-gray-900">Full Scan</div>
+                                <div class="text-xs text-gray-500">Complete analysis</div>
+                            </div>
+                            <i class="fas fa-check-circle text-indigo-600 absolute top-2 right-2"></i>
+                        </label>
+                        <label class="scan-type-option relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-gray-300">
+                            <input type="radio" name="scan_type" value="port_scan" class="sr-only">
+                            <i class="fas fa-door-open text-gray-400 text-lg mr-3"></i>
+                            <div>
+                                <div class="font-medium text-gray-900">Port Scan</div>
+                                <div class="text-xs text-gray-500">Open ports</div>
+                            </div>
+                            <i class="fas fa-check-circle text-indigo-600 absolute top-2 right-2 hidden"></i>
+                        </label>
+                        <label class="scan-type-option relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-gray-300">
+                            <input type="radio" name="scan_type" value="discovery" class="sr-only">
+                            <i class="fas fa-magnifying-glass text-gray-400 text-lg mr-3"></i>
+                            <div>
+                                <div class="font-medium text-gray-900">Discovery</div>
+                                <div class="text-xs text-gray-500">Find assets</div>
+                            </div>
+                            <i class="fas fa-check-circle text-indigo-600 absolute top-2 right-2 hidden"></i>
+                        </label>
+                        <label class="scan-type-option relative flex items-center p-4 border-2 border-gray-200 rounded-xl cursor-pointer hover:border-gray-300">
+                            <input type="radio" name="scan_type" value="vuln_check" class="sr-only">
+                            <i class="fas fa-bug text-gray-400 text-lg mr-3"></i>
+                            <div>
+                                <div class="font-medium text-gray-900">Vuln Check</div>
+                                <div class="text-xs text-gray-500">CVE detection</div>
+                            </div>
+                            <i class="fas fa-check-circle text-indigo-600 absolute top-2 right-2 hidden"></i>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Target Assets</label>
+                    <select class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                        <option value="all">All Assets ({{.Stats.Total}} assets)</option>
+                        <option value="domains">Domains Only</option>
+                        <option value="subdomains">Subdomains Only</option>
+                        <option value="ips">IP Addresses Only</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-3">Scan Options</label>
+                    <div class="space-y-3">
+                        <label class="flex items-center p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded border-gray-300">
+                            <span class="ml-3 text-sm text-gray-700">Enable aggressive mode (faster, more detectable)</span>
+                        </label>
+                        <label class="flex items-center p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                            <input type="checkbox" checked class="w-4 h-4 text-indigo-600 rounded border-gray-300">
+                            <span class="ml-3 text-sm text-gray-700">Send notification on completion</span>
+                        </label>
+                        <label class="flex items-center p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                            <input type="checkbox" class="w-4 h-4 text-indigo-600 rounded border-gray-300">
+                            <span class="ml-3 text-sm text-gray-700">Schedule as recurring scan</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t bg-gray-50 rounded-b-2xl flex justify-end gap-3">
+                <button onclick="document.getElementById('scan-modal').classList.add('hidden')"
+                    class="px-4 py-2.5 text-gray-700 hover:bg-gray-200 rounded-lg font-medium transition-colors">
+                    Cancel
+                </button>
+                <button onclick="alert('Scan started! (Demo mode)'); document.getElementById('scan-modal').classList.add('hidden')"
+                    class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium inline-flex items-center transition-colors">
+                    <i class="fas fa-play mr-2"></i>Start Scan
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.querySelectorAll('.scan-type-option').forEach(option => {
+    option.addEventListener('click', () => {
+        document.querySelectorAll('.scan-type-option').forEach(o => {
+            o.classList.remove('border-indigo-500', 'bg-indigo-50');
+            o.classList.add('border-gray-200');
+            o.querySelector('i:first-child').classList.remove('text-indigo-600');
+            o.querySelector('i:first-child').classList.add('text-gray-400');
+            o.querySelector('.fa-check-circle').classList.add('hidden');
+        });
+        option.classList.remove('border-gray-200');
+        option.classList.add('border-indigo-500', 'bg-indigo-50');
+        option.querySelector('i:first-child').classList.remove('text-gray-400');
+        option.querySelector('i:first-child').classList.add('text-indigo-600');
+        option.querySelector('.fa-check-circle').classList.remove('hidden');
+    });
+});
+</script>
+</body>
+</html>

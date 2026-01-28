@@ -17,7 +17,7 @@ const (
 type Asset struct {
 	Base
 	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
-	CredentialID   uuid.UUID `gorm:"type:uuid;index" json:"credential_id,omitempty"`
+	CredentialID   *uuid.UUID `gorm:"type:uuid;index" json:"credential_id,omitempty"`
 
 	Type  AssetType `gorm:"not null;index" json:"type"`
 	Value string    `gorm:"not null" json:"value"` // domain, IP, bucket name, etc.

@@ -21,29 +21,34 @@ const (
 func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
+			var token string
 
-			// Also check cookie for web dashboard
-			if authHeader == "" {
-				if cookie, err := r.Cookie("token"); err == nil {
-					authHeader = "Bearer " + cookie.Value
+			// 1. Check Authorization header (API requests)
+			authHeader := r.Header.Get("Authorization")
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				token = strings.TrimPrefix(authHeader, "Bearer ")
+			}
+
+			// 2. Check cookie (web dashboard)
+			if token == "" {
+				if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
+					token = cookie.Value
 				}
 			}
 
-			if authHeader == "" {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			// 3. Check X-Auth-Token header (localStorage fallback for AJAX)
+			if token == "" {
+				token = r.Header.Get("X-Auth-Token")
+			}
+
+			if token == "" {
+				handleUnauthorized(w, r)
 				return
 			}
 
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || parts[0] != "Bearer" {
-				http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
-				return
-			}
-
-			claims, err := jwtService.ValidateToken(parts[1])
+			claims, err := jwtService.ValidateToken(token)
 			if err != nil {
-				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				handleUnauthorized(w, r)
 				return
 			}
 
@@ -57,6 +62,22 @@ func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// handleUnauthorized returns appropriate response based on request type
+func handleUnauthorized(w http.ResponseWriter, r *http.Request) {
+	// Check if this is a web page request (not API)
+	accept := r.Header.Get("Accept")
+	isWebRequest := strings.Contains(accept, "text/html") && !strings.HasPrefix(r.URL.Path, "/api/")
+
+	if isWebRequest {
+		// Redirect to login for web requests
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+
+	// Return 401 for API requests
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
 }
 
 // Helper functions to extract values from context

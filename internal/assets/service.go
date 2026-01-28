@@ -196,7 +196,7 @@ func (s *Service) SaveDiscoveredAssets(ctx context.Context, orgID uuid.UUID, cre
 		}
 
 		if credID != nil {
-			asset.CredentialID = *credID
+			asset.CredentialID = credID
 		}
 
 		// First, try to reactivate a soft-deleted asset if it exists

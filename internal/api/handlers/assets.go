@@ -85,7 +85,7 @@ func assetToResponse(asset *models.Asset) AssetResponse {
 		s := asset.ParentID.String()
 		resp.ParentID = &s
 	}
-	if asset.CredentialID != uuid.Nil {
+	if asset.CredentialID != nil && *asset.CredentialID != uuid.Nil {
 		s := asset.CredentialID.String()
 		resp.CredentialID = &s
 	}
