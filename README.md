@@ -22,22 +22,6 @@
 -->
 <!-- TODO: Add demo screenshot or GIF -->
 
----
-
-## Table of Contents
-
-- [The Problem](#the-problem)
-- [The Solution](#the-solution)
-- [Technical Highlights](#technical-highlights)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-- [Performance](#performance)
-- [Architecture](#architecture)
-- [Security](#security)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [License](#license)
 
 ---
 
@@ -74,109 +58,6 @@ Modern organizations face unprecedented challenges in managing their cloud attac
 | **Multi-Tenant by Design** | Full data isolation for MSPs and enterprise teams |
 | **Developer-First** | RESTful API, webhook integrations, and CLI tools |
 | **Self-Hosted Control** | Your data stays on your infrastructure |
-
----
-
-## Technical Highlights
-
-Go-Hunter showcases advanced Go patterns and best practices for building production-grade security tools.
-
-### Concurrent Scanning Engine with Worker Pools
-
-The port scanner uses Go's concurrency primitives for high-performance scanning with configurable rate limiting:
-
-```go
-// ScanHost scans a single host for open ports using worker pool pattern
-func (s *PortScanner) ScanHost(ctx context.Context, host string, ports []int) []PortScanResult {
-    var results []PortScanResult
-    var mu sync.Mutex
-    var wg sync.WaitGroup
-
-    // Semaphore for concurrency control
-    sem := make(chan struct{}, s.concurrency)
-
-    for _, port := range ports {
-        select {
-        case <-ctx.Done():
-            return results
-        case sem <- struct{}{}:
-        }
-
-        wg.Add(1)
-        go func(p int) {
-            defer wg.Done()
-            defer func() { <-sem }()
-
-            result := s.scanPort(ctx, host, p)
-            if result.Open {
-                mu.Lock()
-                results = append(results, result)
-                mu.Unlock()
-            }
-        }(port)
-    }
-
-    wg.Wait()
-    return results
-}
-```
-
-### Multi-Tenant Data Isolation
-
-Every API request is scoped to the authenticated user's organization, ensuring complete data isolation:
-
-```go
-func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            // Validate JWT and extract claims
-            claims, err := jwtService.ValidateToken(token)
-            if err != nil {
-                http.Error(w, "Invalid token", http.StatusUnauthorized)
-                return
-            }
-
-            // Inject organization context for tenant isolation
-            ctx := context.WithValue(r.Context(), OrganizationIDKey, claims.OrganizationID)
-            ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
-
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-```
-
-### Background Job Processing with Asynq
-
-Distributed task processing enables reliable, scalable scanning across multiple workers:
-
-```go
-func (h *Handler) RegisterHandlers(mux *asynq.ServeMux) {
-    mux.HandleFunc(TypeAssetDiscovery, h.HandleAssetDiscovery)
-    mux.HandleFunc(TypePortScan, h.HandlePortScan)
-    mux.HandleFunc(TypeHTTPProbe, h.HandleHTTPProbe)
-    mux.HandleFunc(TypeCrawl, h.HandleCrawl)
-    mux.HandleFunc(TypeVulnCheck, h.HandleVulnCheck)
-    mux.HandleFunc(TypeSchedulerTick, h.HandleSchedulerTick)
-}
-```
-
-### Finding Deduplication with Content-Addressable Storage
-
-Intelligent deduplication prevents duplicate findings using cryptographic hashing:
-
-```go
-// saveFinding persists a finding with deduplication via hash
-func (h *Handler) saveFinding(ctx context.Context, finding models.Finding) error {
-    result := h.db.WithContext(ctx).Clauses(clause.OnConflict{
-        Columns: []clause.Column{{Name: "hash"}},
-        DoUpdates: clause.AssignmentColumns([]string{
-            "last_seen_at", "scan_id", "evidence", "raw_data",
-        }),
-    }).Create(&finding)
-    return result.Error
-}
-```
 
 ---
 
@@ -280,52 +161,7 @@ golangci-lint run
 
 ---
 
-## API Reference
 
-### Authentication
-
-**Login**
-```bash
-curl -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "your-password"
-  }'
-```
-
-**Response:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs...",
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "role": "admin",
-    "organization_id": "550e8400-e29b-41d4-a716-446655440001"
-  }
-}
-```
-
-### Assets
-
-**List Assets**
-```bash
-curl http://localhost:8080/api/v1/assets \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Create Asset**
-```bash
-curl -X POST http://localhost:8080/api/v1/assets \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "domain",
-    "value": "example.com",
-    "source": "manual"
-  }'
 ```
 
 ### Scans
@@ -414,28 +250,7 @@ All errors follow a consistent format:
 
 ---
 
-## Architecture
 
-### System Overview
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Web Browser   │────▶│   API Server    │────▶│   PostgreSQL    │
-│  (HTMX + TW)    │     │   (Chi Router)  │     │   (Data Store)  │
-└─────────────────┘     └────────┬────────┘     └─────────────────┘
-                                 │
-                                 ▼
-                        ┌─────────────────┐
-                        │      Redis      │
-                        │  (Task Queue)   │
-                        └────────┬────────┘
-                                 │
-              ┌──────────────────┼──────────────────┐
-              ▼                  ▼                  ▼
-     ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-     │    Worker 1     │ │    Worker 2     │ │    Worker N     │
-     │   (Scanning)    │ │   (Scanning)    │ │   (Scanning)    │
-     └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
 
 ### Tech Stack
