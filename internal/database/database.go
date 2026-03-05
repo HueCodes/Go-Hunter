@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/hugh/go-hunter/internal/database/models"
 	"github.com/hugh/go-hunter/pkg/config"
@@ -30,8 +31,21 @@ func Connect(cfg *config.DatabaseConfig, log *slog.Logger) (*gorm.DB, error) {
 	}
 
 	// Connection pool settings
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
+	maxOpen := cfg.MaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 25
+	}
+	maxIdle := cfg.MaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 10
+	}
+	connMaxLifetime := cfg.ConnMaxLifetimeMin
+	if connMaxLifetime <= 0 {
+		connMaxLifetime = 30
+	}
+	sqlDB.SetMaxOpenConns(maxOpen)
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetConnMaxLifetime(time.Duration(connMaxLifetime) * time.Minute)
 
 	log.Info("connected to database", "host", cfg.Host, "database", cfg.Name)
 

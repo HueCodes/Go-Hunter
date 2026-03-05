@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.22.10-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates tzdata
 
@@ -29,6 +29,8 @@ RUN chown -R gohunter:gohunter /app /bin/server
 WORKDIR /app
 USER gohunter
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://localhost:8080/health || exit 1
 CMD ["/bin/server"]
 
 # Worker image
@@ -40,4 +42,6 @@ COPY --from=builder /bin/worker /bin/worker
 RUN chown -R gohunter:gohunter /app /bin/worker
 WORKDIR /app
 USER gohunter
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD pgrep worker || exit 1
 CMD ["/bin/worker"]

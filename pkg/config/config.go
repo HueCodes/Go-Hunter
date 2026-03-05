@@ -18,18 +18,23 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host string
-	Port int
-	Env  string
+	Host              string
+	Port              int
+	Env               string
+	RequestTimeoutSec int
+	MaxBodyBytes      int64
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Host               string
+	Port               int
+	User               string
+	Password           string
+	Name               string
+	SSLMode            string
+	MaxOpenConns       int
+	MaxIdleConns       int
+	ConnMaxLifetimeMin int
 }
 
 type RedisConfig struct {
@@ -75,6 +80,10 @@ func (s *ServerConfig) IsDevelopment() bool {
 	return s.Env == "development"
 }
 
+func (s *ServerConfig) IsProduction() bool {
+	return s.Env == "production"
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -82,12 +91,17 @@ func Load() (*Config, error) {
 	v.SetDefault("SERVER_HOST", "0.0.0.0")
 	v.SetDefault("SERVER_PORT", 8080)
 	v.SetDefault("SERVER_ENV", "development")
+	v.SetDefault("SERVER_REQUEST_TIMEOUT_SEC", 30)
+	v.SetDefault("SERVER_MAX_BODY_BYTES", 1048576) // 1MB
 	v.SetDefault("DATABASE_HOST", "localhost")
 	v.SetDefault("DATABASE_PORT", 5432)
 	v.SetDefault("DATABASE_USER", "gohunter")
 	v.SetDefault("DATABASE_PASSWORD", "gohunter_secret")
 	v.SetDefault("DATABASE_NAME", "gohunter")
 	v.SetDefault("DATABASE_SSLMODE", "disable")
+	v.SetDefault("DATABASE_MAX_OPEN_CONNS", 25)
+	v.SetDefault("DATABASE_MAX_IDLE_CONNS", 10)
+	v.SetDefault("DATABASE_CONN_MAX_LIFETIME_MIN", 30)
 	v.SetDefault("REDIS_HOST", "localhost")
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_PASSWORD", "")
@@ -114,17 +128,22 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Host: v.GetString("SERVER_HOST"),
-			Port: v.GetInt("SERVER_PORT"),
-			Env:  v.GetString("SERVER_ENV"),
+			Host:              v.GetString("SERVER_HOST"),
+			Port:              v.GetInt("SERVER_PORT"),
+			Env:               v.GetString("SERVER_ENV"),
+			RequestTimeoutSec: v.GetInt("SERVER_REQUEST_TIMEOUT_SEC"),
+			MaxBodyBytes:      v.GetInt64("SERVER_MAX_BODY_BYTES"),
 		},
 		Database: DatabaseConfig{
-			Host:     v.GetString("DATABASE_HOST"),
-			Port:     v.GetInt("DATABASE_PORT"),
-			User:     v.GetString("DATABASE_USER"),
-			Password: v.GetString("DATABASE_PASSWORD"),
-			Name:     v.GetString("DATABASE_NAME"),
-			SSLMode:  v.GetString("DATABASE_SSLMODE"),
+			Host:               v.GetString("DATABASE_HOST"),
+			Port:               v.GetInt("DATABASE_PORT"),
+			User:               v.GetString("DATABASE_USER"),
+			Password:           v.GetString("DATABASE_PASSWORD"),
+			Name:               v.GetString("DATABASE_NAME"),
+			SSLMode:            v.GetString("DATABASE_SSLMODE"),
+			MaxOpenConns:       v.GetInt("DATABASE_MAX_OPEN_CONNS"),
+			MaxIdleConns:       v.GetInt("DATABASE_MAX_IDLE_CONNS"),
+			ConnMaxLifetimeMin: v.GetInt("DATABASE_CONN_MAX_LIFETIME_MIN"),
 		},
 		Redis: RedisConfig{
 			Host:     v.GetString("REDIS_HOST"),
@@ -144,5 +163,24 @@ func Load() (*Config, error) {
 		},
 	}
 
+	if cfg.Server.IsProduction() {
+		if err := cfg.validateProduction(); err != nil {
+			return nil, fmt.Errorf("production config validation: %w", err)
+		}
+	}
+
 	return cfg, nil
+}
+
+func (c *Config) validateProduction() error {
+	if c.JWT.Secret == "change-me-in-production" || len(c.JWT.Secret) < 32 {
+		return fmt.Errorf("JWT_SECRET must be at least 32 characters in production")
+	}
+	if c.Encryption.Key == "" {
+		return fmt.Errorf("ENCRYPTION_KEY must be set in production")
+	}
+	if c.Database.Password == "gohunter_secret" {
+		return fmt.Errorf("DATABASE_PASSWORD must not use default value in production")
+	}
+	return nil
 }

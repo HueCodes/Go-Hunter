@@ -37,14 +37,20 @@ func Logging(logger *slog.Logger) func(http.Handler) http.Handler {
 
 			duration := time.Since(start)
 
-			logger.Info("request",
+			attrs := []any{
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", wrapped.status,
 				"size", wrapped.size,
-				"duration", duration.String(),
+				"duration_ms", duration.Milliseconds(),
 				"ip", r.RemoteAddr,
-			)
+			}
+
+			if reqID := GetRequestID(r.Context()); reqID != "" {
+				attrs = append(attrs, "request_id", reqID)
+			}
+
+			logger.Info("request", attrs...)
 		})
 	}
 }

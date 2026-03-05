@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: gohunter-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: gohunter
       POSTGRES_PASSWORD: gohunter_secret
@@ -15,10 +16,21 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
     container_name: gohunter-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
@@ -28,6 +40,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   server:
     build:
@@ -35,6 +57,7 @@ services:
       dockerfile: Dockerfile
       target: server
     container_name: gohunter-server
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -49,11 +72,23 @@ services:
       - DATABASE_SSLMODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
   worker:
     build:
@@ -61,6 +96,7 @@ services:
       dockerfile: Dockerfile
       target: worker
     container_name: gohunter-worker
+    restart: unless-stopped
     environment:
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
@@ -70,11 +106,23 @@ services:
       - DATABASE_SSLMODE=disable
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "2.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
 
 volumes:
   postgres_data:

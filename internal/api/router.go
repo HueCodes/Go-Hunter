@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -36,14 +37,34 @@ type RouterConfig struct {
 	AllowedOrigins []string // CORS allowed origins
 	RateLimitReqs  int      // Rate limit requests per window
 	RateLimitSecs  int      // Rate limit window in seconds
+	RequestTimeout time.Duration
+	MaxBodyBytes   int64
 }
 
 func NewRouter(cfg RouterConfig) *Router {
 	r := chi.NewRouter()
 
+	// Request ID must be first so all subsequent middleware can use it
+	r.Use(middleware.RequestID)
+
 	// Global middleware
 	r.Use(middleware.Recovery(cfg.Logger))
+	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.Logging(cfg.Logger))
+
+	// Request timeout
+	requestTimeout := cfg.RequestTimeout
+	if requestTimeout <= 0 {
+		requestTimeout = 30 * time.Second
+	}
+	r.Use(middleware.Timeout(requestTimeout))
+
+	// Body size limit
+	maxBody := cfg.MaxBodyBytes
+	if maxBody <= 0 {
+		maxBody = 1 << 20 // 1MB
+	}
+	r.Use(middleware.BodyLimit(maxBody))
 
 	// Rate limiting - applied globally to prevent abuse
 	if cfg.RateLimitReqs > 0 {
@@ -59,8 +80,8 @@ func NewRouter(cfg RouterConfig) *Router {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"},
+		ExposedHeaders:   []string{"X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset", "X-Request-ID"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
