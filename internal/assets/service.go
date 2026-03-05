@@ -174,76 +174,82 @@ func (s *Service) DiscoverAssets(ctx context.Context, orgID uuid.UUID, credIDs [
 	return allAssets, nil
 }
 
-// SaveDiscoveredAssets stores discovered assets in the database
+// SaveDiscoveredAssets stores discovered assets in the database within a transaction.
 func (s *Service) SaveDiscoveredAssets(ctx context.Context, orgID uuid.UUID, credID *uuid.UUID, discovered []DiscoveredAsset) (int, error) {
 	now := time.Now().Unix()
 	saved := 0
 
-	for _, d := range discovered {
-		// Convert metadata to JSON
-		metadataJSON, _ := json.Marshal(d.Metadata)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, d := range discovered {
+			metadataJSON, _ := json.Marshal(d.Metadata)
 
-		asset := models.Asset{
-			OrganizationID: orgID,
-			Type:           d.Type,
-			Value:          d.Value,
-			Source:         d.Source,
-			Metadata:       string(metadataJSON),
-			DiscoveredAt:   now,
-			LastSeenAt:     now,
-			IsActive:       true,
-			ParentID:       d.ParentID,
-		}
+			asset := models.Asset{
+				OrganizationID: orgID,
+				Type:           d.Type,
+				Value:          d.Value,
+				Source:         d.Source,
+				Metadata:       string(metadataJSON),
+				DiscoveredAt:   now,
+				LastSeenAt:     now,
+				IsActive:       true,
+				ParentID:       d.ParentID,
+			}
 
-		if credID != nil {
-			asset.CredentialID = credID
-		}
+			if credID != nil {
+				asset.CredentialID = credID
+			}
 
-		// First, try to reactivate a soft-deleted asset if it exists
-		reactivated := s.db.WithContext(ctx).Unscoped().
-			Model(&models.Asset{}).
-			Where("organization_id = ? AND type = ? AND value = ? AND deleted_at IS NOT NULL", orgID, d.Type, d.Value).
-			Updates(map[string]interface{}{
-				"deleted_at":   nil,
-				"last_seen_at": now,
-				"source":       d.Source,
-				"metadata":     string(metadataJSON),
-				"is_active":    true,
-			})
+			// First, try to reactivate a soft-deleted asset if it exists
+			reactivated := tx.Unscoped().
+				Model(&models.Asset{}).
+				Where("organization_id = ? AND type = ? AND value = ? AND deleted_at IS NOT NULL", orgID, d.Type, d.Value).
+				Updates(map[string]interface{}{
+					"deleted_at":   nil,
+					"last_seen_at": now,
+					"source":       d.Source,
+					"metadata":     string(metadataJSON),
+					"is_active":    true,
+				})
 
-		if reactivated.RowsAffected > 0 {
-			s.logger.Debug("reactivated soft-deleted asset",
-				"type", d.Type,
-				"value", d.Value,
-			)
+			if reactivated.RowsAffected > 0 {
+				s.logger.Debug("reactivated soft-deleted asset",
+					"type", d.Type,
+					"value", d.Value,
+				)
+				saved++
+				continue
+			}
+
+			// Upsert: update if exists, create if not
+			result := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{
+					{Name: "organization_id"},
+					{Name: "type"},
+					{Name: "value"},
+				},
+				DoUpdates: clause.AssignmentColumns([]string{
+					"last_seen_at",
+					"source",
+					"metadata",
+					"is_active",
+				}),
+			}).Create(&asset)
+
+			if result.Error != nil {
+				s.logger.Error("failed to save asset",
+					"type", d.Type,
+					"value", d.Value,
+					"error", result.Error,
+				)
+				continue
+			}
 			saved++
-			continue
 		}
+		return nil
+	})
 
-		// Upsert: update if exists, create if not
-		result := s.db.WithContext(ctx).Clauses(clause.OnConflict{
-			Columns: []clause.Column{
-				{Name: "organization_id"},
-				{Name: "type"},
-				{Name: "value"},
-			},
-			DoUpdates: clause.AssignmentColumns([]string{
-				"last_seen_at",
-				"source",
-				"metadata",
-				"is_active",
-			}),
-		}).Create(&asset)
-
-		if result.Error != nil {
-			s.logger.Error("failed to save asset",
-				"type", d.Type,
-				"value", d.Value,
-				"error", result.Error,
-			)
-			continue
-		}
-		saved++
+	if err != nil {
+		return saved, fmt.Errorf("saving discovered assets: %w", err)
 	}
 
 	s.logger.Info("saved discovered assets",

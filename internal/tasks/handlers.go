@@ -754,18 +754,48 @@ func (h *Handler) HandleSchedulerTick(ctx context.Context, t *asynq.Task) error 
 
 // runScheduledScan creates and enqueues a scan from a schedule, then updates the schedule
 func (h *Handler) runScheduledScan(ctx context.Context, sched *models.ScheduledScan) error {
-	// Create a scan from the schedule
-	scan := models.Scan{
-		OrganizationID: sched.OrganizationID,
-		Type:           sched.ScanType,
-		Status:         models.ScanStatusPending,
-		TargetAssetIDs: sched.TargetAssetIDs,
-		CredentialIDs:  sched.CredentialIDs,
-		Config:         sched.Config,
+	// Calculate next run time before starting the transaction
+	nextRun, err := util.NextCronTime(sched.CronExpr, time.Now())
+	if err != nil {
+		h.logger.Error("failed to calculate next run time",
+			"schedule_id", sched.ID,
+			"cron_expr", sched.CronExpr,
+			"error", err,
+		)
+		_ = h.db.Model(sched).Update("is_enabled", false)
+		return fmt.Errorf("invalid cron expression: %w", err)
 	}
 
-	if err := h.db.WithContext(ctx).Create(&scan).Error; err != nil {
-		return fmt.Errorf("creating scan: %w", err)
+	var scan models.Scan
+	err = h.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Create a scan from the schedule
+		scan = models.Scan{
+			OrganizationID: sched.OrganizationID,
+			Type:           sched.ScanType,
+			Status:         models.ScanStatusPending,
+			TargetAssetIDs: sched.TargetAssetIDs,
+			CredentialIDs:  sched.CredentialIDs,
+			Config:         sched.Config,
+		}
+
+		if err := tx.Create(&scan).Error; err != nil {
+			return fmt.Errorf("creating scan: %w", err)
+		}
+
+		// Update schedule with last run info and next run time
+		now := time.Now().Unix()
+		if err := tx.Model(sched).Updates(map[string]interface{}{
+			"last_run_at":  now,
+			"last_scan_id": scan.ID,
+			"next_run_at":  nextRun.Unix(),
+		}).Error; err != nil {
+			return fmt.Errorf("updating schedule: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	h.logger.Info("created scan from schedule",
@@ -774,7 +804,7 @@ func (h *Handler) runScheduledScan(ctx context.Context, sched *models.ScheduledS
 		"type", scan.Type,
 	)
 
-	// Enqueue the task
+	// Enqueue the task (outside transaction - best effort)
 	if h.asynqClient != nil {
 		task, err := h.createScanTask(scan)
 		if err != nil {
@@ -788,33 +818,9 @@ func (h *Handler) runScheduledScan(ctx context.Context, sched *models.ScheduledS
 					"scan_id", scan.ID,
 					"task_id", info.ID,
 				)
-				// Update scan with task ID
 				_ = h.db.Model(&scan).Update("task_id", info.ID)
 			}
 		}
-	}
-
-	// Calculate next run time
-	nextRun, err := util.NextCronTime(sched.CronExpr, time.Now())
-	if err != nil {
-		h.logger.Error("failed to calculate next run time",
-			"schedule_id", sched.ID,
-			"cron_expr", sched.CronExpr,
-			"error", err,
-		)
-		// Disable the schedule if cron expression is invalid
-		_ = h.db.Model(sched).Update("is_enabled", false)
-		return fmt.Errorf("invalid cron expression: %w", err)
-	}
-
-	// Update schedule with last run info and next run time
-	now := time.Now().Unix()
-	if err := h.db.Model(sched).Updates(map[string]interface{}{
-		"last_run_at":  now,
-		"last_scan_id": scan.ID,
-		"next_run_at":  nextRun.Unix(),
-	}).Error; err != nil {
-		return fmt.Errorf("updating schedule: %w", err)
 	}
 
 	return nil
