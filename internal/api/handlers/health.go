@@ -22,13 +22,14 @@ type HealthResponse struct {
 	Services map[string]string `json:"services"`
 }
 
+// Health is a liveness probe. Returns unhealthy only if the database is down.
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	services := make(map[string]string)
 	status := "healthy"
 
 	// Check database
 	sqlDB, err := h.db.DB()
-	if err != nil || sqlDB.Ping() != nil {
+	if err != nil || sqlDB.PingContext(r.Context()) != nil {
 		services["database"] = "unhealthy"
 		status = "unhealthy"
 	} else {
@@ -39,7 +40,9 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	if h.redis != nil {
 		if err := h.redis.Ping(r.Context()).Err(); err != nil {
 			services["redis"] = "unhealthy"
-			status = "unhealthy"
+			if status == "healthy" {
+				status = "degraded"
+			}
 		} else {
 			services["redis"] = "healthy"
 		}
@@ -58,8 +61,23 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Ready is a readiness probe. Returns 200 only when all dependencies are available.
 func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
-	// Simple readiness check
+	// Database must be reachable
+	sqlDB, err := h.db.DB()
+	if err != nil || sqlDB.PingContext(r.Context()) != nil {
+		http.Error(w, "database not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Redis must be reachable (if configured)
+	if h.redis != nil {
+		if err := h.redis.Ping(r.Context()).Err(); err != nil {
+			http.Error(w, "redis not ready", http.StatusServiceUnavailable)
+			return
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }
