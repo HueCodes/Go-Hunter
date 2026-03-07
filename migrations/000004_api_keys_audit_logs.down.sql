@@ -1,0 +1,5 @@
+DROP INDEX IF EXISTS idx_assets_tags;
+ALTER TABLE assets DROP COLUMN IF EXISTS tags;
+
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS api_keys;

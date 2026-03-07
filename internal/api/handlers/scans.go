@@ -121,7 +121,7 @@ func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	scanType := r.URL.Query().Get("type")
 
-	query := h.db.Model(&models.Scan{}).Where("organization_id = ?", orgID)
+	query := h.db.WithContext(r.Context()).Model(&models.Scan{}).Where("organization_id = ?", orgID)
 
 	if status != "" {
 		query = query.Where("status = ?", status)
@@ -190,7 +190,7 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if len(credentialIDs) > 0 {
 		var count int64
-		h.db.Model(&models.CloudCredential{}).
+		h.db.WithContext(r.Context()).Model(&models.CloudCredential{}).
 			Where("id IN ? AND organization_id = ?", credentialIDs, orgID).
 			Count(&count)
 		if count != int64(len(credentialIDs)) {
@@ -201,7 +201,7 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if len(targetAssetIDs) > 0 {
 		var count int64
-		h.db.Model(&models.Asset{}).
+		h.db.WithContext(r.Context()).Model(&models.Asset{}).
 			Where("id IN ? AND organization_id = ?", targetAssetIDs, orgID).
 			Count(&count)
 		if count != int64(len(targetAssetIDs)) {
@@ -224,7 +224,7 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Config:         scanConfig,
 	}
 
-	if err := h.db.Create(&scan).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Create(&scan).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create scan", err))
 		return
 	}
@@ -289,7 +289,7 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 			apperrors.WriteHTTP(w, r, apperrors.Unavailable("Failed to enqueue scan task — queue service unavailable"))
 			return
 		}
-		h.db.Model(&scan).Update("task_id", info.ID)
+		h.db.WithContext(r.Context()).Model(&scan).Update("task_id", info.ID)
 		scan.TaskID = info.ID
 	}
 
@@ -307,7 +307,7 @@ func (h *ScanHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var scan models.Scan
-	if err := h.db.Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Scan"))
 			return
@@ -330,7 +330,7 @@ func (h *ScanHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var scan models.Scan
-	if err := h.db.Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Scan"))
 			return
@@ -350,7 +350,7 @@ func (h *ScanHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		"updated_at":   time.Now(),
 	}
 
-	if err := h.db.Model(&scan).Updates(updates).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Model(&scan).Updates(updates).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to cancel scan", err))
 		return
 	}

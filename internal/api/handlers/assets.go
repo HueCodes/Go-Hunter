@@ -107,7 +107,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	tagKey := r.URL.Query().Get("tag_key")
 	tagValue := r.URL.Query().Get("tag_value")
 
-	query := h.db.Model(&models.Asset{}).Where("organization_id = ?", orgID)
+	query := h.db.WithContext(r.Context()).Model(&models.Asset{}).Where("organization_id = ?", orgID)
 
 	if assetType != "" {
 		query = query.Where("type = ?", assetType)
@@ -195,14 +195,14 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.ParentID != nil && *req.ParentID != "" {
 		parentID, _ := uuid.Parse(*req.ParentID)
 		var parent models.Asset
-		if err := h.db.Where("id = ? AND organization_id = ?", parentID, orgID).First(&parent).Error; err != nil {
+		if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", parentID, orgID).First(&parent).Error; err != nil {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Parent asset"))
 			return
 		}
 		asset.ParentID = &parentID
 	}
 
-	if err := h.db.Create(&asset).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Create(&asset).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create asset", err))
 		return
 	}
@@ -221,7 +221,7 @@ func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var asset models.Asset
-	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
 			return
@@ -243,7 +243,7 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := h.db.Model(&models.Asset{}).
+	result := h.db.WithContext(r.Context()).Model(&models.Asset{}).
 		Where("id = ? AND organization_id = ?", assetID, orgID).
 		Update("is_active", false)
 
@@ -287,7 +287,7 @@ func (h *AssetHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var asset models.Asset
-	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
 			return
@@ -296,7 +296,7 @@ func (h *AssetHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.db.Model(&asset).Update("tags", string(tagsJSON)).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Model(&asset).Update("tags", string(tagsJSON)).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update tags", err))
 		return
 	}
@@ -316,7 +316,7 @@ func (h *AssetHandler) RiskScore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var asset models.Asset
-	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
 			return
@@ -331,7 +331,7 @@ func (h *AssetHandler) RiskScore(w http.ResponseWriter, r *http.Request) {
 		Count    int
 	}
 	var rows []severityRow
-	h.db.Model(&models.Finding{}).
+	h.db.WithContext(r.Context()).Model(&models.Finding{}).
 		Select("severity, count(*) as count").
 		Where("asset_id = ? AND organization_id = ? AND status = 'open'", assetID, orgID).
 		Group("severity").

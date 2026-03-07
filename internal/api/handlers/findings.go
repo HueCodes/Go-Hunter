@@ -89,7 +89,7 @@ func (h *FindingHandler) List(w http.ResponseWriter, r *http.Request) {
 	assetID := r.URL.Query().Get("asset_id")
 	findingType := r.URL.Query().Get("type")
 
-	query := h.db.Model(&models.Finding{}).Where("organization_id = ?", orgID)
+	query := h.db.WithContext(r.Context()).Model(&models.Finding{}).Where("organization_id = ?", orgID)
 
 	if severity != "" {
 		query = query.Where("severity = ?", severity)
@@ -152,7 +152,7 @@ func (h *FindingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var finding models.Finding
-	if err := h.db.
+	if err := h.db.WithContext(r.Context()).
 		Preload("Asset").
 		Where("id = ? AND organization_id = ?", findingID, orgID).
 		First(&finding).Error; err != nil {
@@ -206,7 +206,7 @@ func (h *FindingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var finding models.Finding
-	if err := h.db.Where("id = ? AND organization_id = ?", findingID, orgID).First(&finding).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", findingID, orgID).First(&finding).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Finding"))
 			return
@@ -230,12 +230,12 @@ func (h *FindingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		updates["resolved_by"] = nil
 	}
 
-	if err := h.db.Model(&finding).Updates(updates).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Model(&finding).Updates(updates).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update finding status", err))
 		return
 	}
 
-	h.db.First(&finding, findingID)
+	h.db.WithContext(r.Context()).First(&finding, findingID)
 
 	writeJSON(w, http.StatusOK, findingToResponse(&finding))
 }

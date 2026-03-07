@@ -135,7 +135,7 @@ func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Config:         req.Config,
 	}
 
-	if err := h.db.Create(&schedule).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Create(&schedule).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create schedule", err))
 		return
 	}
@@ -147,7 +147,7 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
 	var schedules []models.ScheduledScan
-	if err := h.db.Where("organization_id = ?", orgID).
+	if err := h.db.WithContext(r.Context()).Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Find(&schedules).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to fetch schedules", err))
@@ -172,7 +172,7 @@ func (h *ScheduleHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var schedule models.ScheduledScan
-	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
@@ -195,7 +195,7 @@ func (h *ScheduleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var schedule models.ScheduledScan
-	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
@@ -236,7 +236,7 @@ func (h *ScheduleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		schedule.Config = *req.Config
 	}
 
-	if err := h.db.Save(&schedule).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Save(&schedule).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update schedule", err))
 		return
 	}
@@ -253,7 +253,7 @@ func (h *ScheduleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := h.db.Where("id = ? AND organization_id = ?", id, orgID).
+	result := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", id, orgID).
 		Delete(&models.ScheduledScan{})
 	if result.Error != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to delete schedule", result.Error))
@@ -277,7 +277,7 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var schedule models.ScheduledScan
-	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
+	if err := h.db.WithContext(r.Context()).Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
@@ -296,7 +296,7 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 		Config:         schedule.Config,
 	}
 
-	if err := h.db.Create(&scan).Error; err != nil {
+	if err := h.db.WithContext(r.Context()).Create(&scan).Error; err != nil {
 		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create scan", err))
 		return
 	}
@@ -306,13 +306,13 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 		if err == nil && task != nil {
 			info, err := h.asynqClient.Enqueue(task)
 			if err == nil {
-				_ = h.db.Model(&scan).Update("task_id", info.ID)
+				_ = h.db.WithContext(r.Context()).Model(&scan).Update("task_id", info.ID)
 			}
 		}
 	}
 
 	now := time.Now().Unix()
-	_ = h.db.Model(&schedule).Updates(map[string]interface{}{
+	_ = h.db.WithContext(r.Context()).Model(&schedule).Updates(map[string]interface{}{
 		"last_run_at":  now,
 		"last_scan_id": scan.ID,
 	})

@@ -44,11 +44,11 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgID := middleware.GetOrganizationID(r.Context())
-	h.db.Table("assets").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.TotalAssets)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND deleted_at IS NULL", orgID).Count(&stats.TotalFindings)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'critical' AND deleted_at IS NULL", orgID).Count(&stats.CriticalCount)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'high' AND deleted_at IS NULL", orgID).Count(&stats.HighCount)
-	h.db.Table("scans").Where("organization_id = ? AND status IN ('pending', 'running') AND deleted_at IS NULL", orgID).Count(&stats.ActiveScans)
+	h.db.WithContext(r.Context()).Table("assets").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.TotalAssets)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND deleted_at IS NULL", orgID).Count(&stats.TotalFindings)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'critical' AND deleted_at IS NULL", orgID).Count(&stats.CriticalCount)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'high' AND deleted_at IS NULL", orgID).Count(&stats.HighCount)
+	h.db.WithContext(r.Context()).Table("scans").Where("organization_id = ? AND status IN ('pending', 'running') AND deleted_at IS NULL", orgID).Count(&stats.ActiveScans)
 
 	data := map[string]interface{}{
 		"User":  user,
@@ -133,7 +133,7 @@ func (h *DashboardHandler) Assets(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
 	var assets []models.Asset
-	h.db.Where("organization_id = ? AND deleted_at IS NULL", orgID).
+	h.db.WithContext(r.Context()).Where("organization_id = ? AND deleted_at IS NULL", orgID).
 		Order("created_at DESC").
 		Limit(100).
 		Find(&assets)
@@ -145,10 +145,10 @@ func (h *DashboardHandler) Assets(w http.ResponseWriter, r *http.Request) {
 		IPs        int64
 		Total      int64
 	}
-	h.db.Table("assets").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.Total)
-	h.db.Table("assets").Where("organization_id = ? AND type = 'domain' AND deleted_at IS NULL", orgID).Count(&stats.Domains)
-	h.db.Table("assets").Where("organization_id = ? AND type = 'subdomain' AND deleted_at IS NULL", orgID).Count(&stats.Subdomains)
-	h.db.Table("assets").Where("organization_id = ? AND type = 'ip' AND deleted_at IS NULL", orgID).Count(&stats.IPs)
+	h.db.WithContext(r.Context()).Table("assets").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.Total)
+	h.db.WithContext(r.Context()).Table("assets").Where("organization_id = ? AND type = 'domain' AND deleted_at IS NULL", orgID).Count(&stats.Domains)
+	h.db.WithContext(r.Context()).Table("assets").Where("organization_id = ? AND type = 'subdomain' AND deleted_at IS NULL", orgID).Count(&stats.Subdomains)
+	h.db.WithContext(r.Context()).Table("assets").Where("organization_id = ? AND type = 'ip' AND deleted_at IS NULL", orgID).Count(&stats.IPs)
 
 	data := map[string]interface{}{
 		"User":       user,
@@ -174,7 +174,7 @@ func (h *DashboardHandler) Findings(w http.ResponseWriter, r *http.Request) {
 		models.Finding
 		AssetValue string
 	}
-	h.db.Table("findings").
+	h.db.WithContext(r.Context()).Table("findings").
 		Select("findings.*, assets.value as asset_value").
 		Joins("LEFT JOIN assets ON assets.id = findings.asset_id").
 		Where("findings.organization_id = ? AND findings.deleted_at IS NULL", orgID).
@@ -191,12 +191,12 @@ func (h *DashboardHandler) Findings(w http.ResponseWriter, r *http.Request) {
 		Info     int64
 		Total    int64
 	}
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND deleted_at IS NULL", orgID).Count(&stats.Total)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'critical' AND deleted_at IS NULL", orgID).Count(&stats.Critical)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'high' AND deleted_at IS NULL", orgID).Count(&stats.High)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'medium' AND deleted_at IS NULL", orgID).Count(&stats.Medium)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'low' AND deleted_at IS NULL", orgID).Count(&stats.Low)
-	h.db.Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'info' AND deleted_at IS NULL", orgID).Count(&stats.Info)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND deleted_at IS NULL", orgID).Count(&stats.Total)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'critical' AND deleted_at IS NULL", orgID).Count(&stats.Critical)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'high' AND deleted_at IS NULL", orgID).Count(&stats.High)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'medium' AND deleted_at IS NULL", orgID).Count(&stats.Medium)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'low' AND deleted_at IS NULL", orgID).Count(&stats.Low)
+	h.db.WithContext(r.Context()).Table("findings").Where("organization_id = ? AND status = 'open' AND severity = 'info' AND deleted_at IS NULL", orgID).Count(&stats.Info)
 
 	data := map[string]interface{}{
 		"User":       user,
@@ -219,7 +219,7 @@ func (h *DashboardHandler) Scans(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
 	var scans []models.Scan
-	h.db.Where("organization_id = ? AND deleted_at IS NULL", orgID).
+	h.db.WithContext(r.Context()).Where("organization_id = ? AND deleted_at IS NULL", orgID).
 		Order("created_at DESC").
 		Limit(50).
 		Find(&scans)
@@ -231,10 +231,10 @@ func (h *DashboardHandler) Scans(w http.ResponseWriter, r *http.Request) {
 		Failed    int64
 		Total     int64
 	}
-	h.db.Table("scans").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.Total)
-	h.db.Table("scans").Where("organization_id = ? AND status IN ('pending', 'running') AND deleted_at IS NULL", orgID).Count(&stats.Running)
-	h.db.Table("scans").Where("organization_id = ? AND status = 'completed' AND deleted_at IS NULL", orgID).Count(&stats.Completed)
-	h.db.Table("scans").Where("organization_id = ? AND status = 'failed' AND deleted_at IS NULL", orgID).Count(&stats.Failed)
+	h.db.WithContext(r.Context()).Table("scans").Where("organization_id = ? AND deleted_at IS NULL", orgID).Count(&stats.Total)
+	h.db.WithContext(r.Context()).Table("scans").Where("organization_id = ? AND status IN ('pending', 'running') AND deleted_at IS NULL", orgID).Count(&stats.Running)
+	h.db.WithContext(r.Context()).Table("scans").Where("organization_id = ? AND status = 'completed' AND deleted_at IS NULL", orgID).Count(&stats.Completed)
+	h.db.WithContext(r.Context()).Table("scans").Where("organization_id = ? AND status = 'failed' AND deleted_at IS NULL", orgID).Count(&stats.Failed)
 
 	data := map[string]interface{}{
 		"User":       user,
