@@ -17,6 +17,7 @@ import (
 	"github.com/hugh/go-hunter/internal/auth"
 	"github.com/hugh/go-hunter/pkg/crypto"
 	apperrors "github.com/hugh/go-hunter/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -100,9 +101,13 @@ func NewRouter(cfg RouterConfig) *Router {
 	findingHandler := handlers.NewFindingHandler(cfg.DB)
 	scheduleHandler := handlers.NewScheduleHandler(cfg.DB, cfg.AsynqClient)
 
-	// Health endpoints (no auth required)
+	// Metrics middleware (must be after recovery, before routes)
+	r.Use(middleware.Metrics)
+
+	// Health and operational endpoints (no auth required)
 	r.Get("/health", healthHandler.Health)
 	r.Get("/ready", healthHandler.Ready)
+	r.Handle("/metrics", promhttp.Handler())
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
