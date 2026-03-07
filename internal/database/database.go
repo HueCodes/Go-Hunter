@@ -73,5 +73,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Scan{},
 		&models.Finding{},
 		&models.APIKey{},
+		&models.AuditLog{},
 	)
 }
