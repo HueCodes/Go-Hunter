@@ -1,0 +1,1801 @@
+openapi: 3.0.3
+info:
+  title: Go-Hunter API
+  description: |
+    Go-Hunter is a cloud-native attack surface management and vulnerability scanning platform.
+    This API provides endpoints for managing cloud credentials, assets, scans, findings, and scheduled scans.
+
+    ## Authentication
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    ## Rate Limiting
+    API requests are rate-limited. Check the following response headers:
+    - `X-RateLimit-Limit`: Maximum requests allowed per window
+    - `X-RateLimit-Remaining`: Remaining requests in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the window resets
+  version: 1.0.0
+  contact:
+    name: Go-Hunter Support
+    email: support@go-hunter.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+tags:
+  - name: Authentication
+    description: User registration, login, and logout
+  - name: Users
+    description: Current user information
+  - name: Credentials
+    description: Cloud provider credentials management
+  - name: Assets
+    description: Attack surface asset management
+  - name: Scans
+    description: Security scan execution and management
+  - name: Findings
+    description: Security findings and vulnerability management
+  - name: Schedules
+    description: Scheduled scan configuration
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account and organization. Returns a JWT token upon successful registration.
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login with email and password
+      description: Authenticate a user and return a JWT token. Also sets an HTTP-only cookie for web dashboard access.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Account is inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout the current user
+      description: Clears the authentication cookie for web dashboard sessions.
+      operationId: logout
+      security: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /api/v1/me:
+    get:
+      tags:
+        - Users
+      summary: Get current user information
+      description: Returns the profile information of the currently authenticated user.
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: User information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/credentials:
+    get:
+      tags:
+        - Credentials
+      summary: List all credentials
+      description: Returns all cloud credentials for the current organization. Sensitive data is never returned.
+      operationId: listCredentials
+      responses:
+        '200':
+          description: List of credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Credential'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Credentials
+      summary: Create a new credential
+      description: Add new cloud provider credentials. Credentials are encrypted at rest.
+      operationId: createCredential
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCredentialRequest'
+      responses:
+        '201':
+          description: Credential created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/credentials/{id}:
+    delete:
+      tags:
+        - Credentials
+      summary: Delete a credential
+      description: Remove a cloud credential from the organization.
+      operationId: deleteCredential
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Credential UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Credential deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid credential ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Credential not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/credentials/{id}/test:
+    post:
+      tags:
+        - Credentials
+      summary: Test a credential
+      description: Validate that a credential can successfully authenticate with the cloud provider.
+      operationId: testCredential
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Credential UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Credential is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid credential ID or credential validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assets:
+    get:
+      tags:
+        - Assets
+      summary: List all assets
+      description: Returns a paginated list of assets for the current organization with optional filtering.
+      operationId: listAssets
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page (default 20, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: type
+          in: query
+          description: Filter by asset type
+          schema:
+            $ref: '#/components/schemas/AssetType'
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Paginated list of assets
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Asset'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Assets
+      summary: Create a new asset
+      description: Manually add an asset to the organization's attack surface.
+      operationId: createAsset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAssetRequest'
+      responses:
+        '201':
+          description: Asset created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          description: Validation error or parent asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/assets/{id}:
+    get:
+      tags:
+        - Assets
+      summary: Get a specific asset
+      description: Returns detailed information about a specific asset.
+      operationId: getAsset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Asset'
+        '400':
+          description: Invalid asset ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Assets
+      summary: Delete an asset
+      description: Soft-delete an asset by setting is_active to false.
+      operationId: deleteAsset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Asset UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Asset deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid asset ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/scans:
+    get:
+      tags:
+        - Scans
+      summary: List all scans
+      description: Returns a paginated list of scans for the current organization with optional filtering.
+      operationId: listScans
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page (default 20, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          description: Filter by scan status
+          schema:
+            $ref: '#/components/schemas/ScanStatus'
+        - name: type
+          in: query
+          description: Filter by scan type
+          schema:
+            $ref: '#/components/schemas/ScanType'
+      responses:
+        '200':
+          description: Paginated list of scans
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Scan'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Scans
+      summary: Create a new scan
+      description: |
+        Start a new security scan. The scan type determines the required parameters:
+        - `discovery`: Requires credential_ids, discovers cloud assets
+        - `port_scan`: Requires target_asset_ids, scans for open ports
+        - `http_probe`: Requires target_asset_ids, probes HTTP services
+        - `crawl`: Requires target_asset_ids, crawls web applications
+        - `vuln_check`: Requires target_asset_ids, checks for vulnerabilities
+        - `full`: Requires credential_ids, runs all scan types
+      operationId: createScan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScanRequest'
+      responses:
+        '201':
+          description: Scan created and queued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+        '400':
+          description: Validation error or resources not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/scans/{id}:
+    get:
+      tags:
+        - Scans
+      summary: Get a specific scan
+      description: Returns detailed information about a specific scan including progress and statistics.
+      operationId: getScan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Scan UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scan details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+        '400':
+          description: Invalid scan ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/scans/{id}/cancel:
+    post:
+      tags:
+        - Scans
+      summary: Cancel a scan
+      description: Cancel a pending or running scan. Completed, failed, or already cancelled scans cannot be cancelled.
+      operationId: cancelScan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Scan UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scan cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scan'
+        '400':
+          description: Invalid scan ID or scan cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Scan not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/findings:
+    get:
+      tags:
+        - Findings
+      summary: List all findings
+      description: Returns a paginated list of security findings for the current organization with optional filtering.
+      operationId: listFindings
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page (default 20, max 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: severity
+          in: query
+          description: Filter by severity level
+          schema:
+            $ref: '#/components/schemas/Severity'
+        - name: status
+          in: query
+          description: Filter by finding status
+          schema:
+            $ref: '#/components/schemas/FindingStatus'
+        - name: asset_id
+          in: query
+          description: Filter by asset UUID
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          description: Filter by finding type (e.g., open_port, exposed_bucket)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated list of findings
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Finding'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/findings/{id}:
+    get:
+      tags:
+        - Findings
+      summary: Get a specific finding
+      description: Returns detailed information about a specific security finding.
+      operationId: getFinding
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Finding UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Finding details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+        '400':
+          description: Invalid finding ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Finding not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/findings/{id}/status:
+    put:
+      tags:
+        - Findings
+      summary: Update finding status
+      description: |
+        Update the status of a security finding. Valid status transitions:
+        - `open`: Reopen a resolved finding
+        - `acknowledged`: Mark as reviewed but not yet addressed
+        - `fixed`: Mark as remediated
+        - `false_positive`: Mark as not a real issue
+        - `accepted`: Accept the risk without remediation
+      operationId: updateFindingStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Finding UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFindingStatusRequest'
+      responses:
+        '200':
+          description: Finding status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Finding'
+        '400':
+          description: Invalid finding ID or invalid status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Finding not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/schedules:
+    get:
+      tags:
+        - Schedules
+      summary: List all scheduled scans
+      description: Returns all scheduled scans for the current organization.
+      operationId: listSchedules
+      responses:
+        '200':
+          description: List of scheduled scans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Schedule'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Schedules
+      summary: Create a new scheduled scan
+      description: Create a new recurring scan schedule using cron expressions.
+      operationId: createSchedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateScheduleRequest'
+      responses:
+        '201':
+          description: Scheduled scan created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Validation error or invalid cron expression
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/schedules/{id}:
+    get:
+      tags:
+        - Schedules
+      summary: Get a specific scheduled scan
+      description: Returns detailed information about a specific scheduled scan.
+      operationId: getSchedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Schedule UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Schedule details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Invalid schedule ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Schedules
+      summary: Update a scheduled scan
+      description: Update an existing scheduled scan. Only provided fields will be updated.
+      operationId: updateSchedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Schedule UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateScheduleRequest'
+      responses:
+        '200':
+          description: Schedule updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          description: Validation error or invalid cron expression
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Schedules
+      summary: Delete a scheduled scan
+      description: Remove a scheduled scan configuration.
+      operationId: deleteSchedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Schedule UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Schedule deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Invalid schedule ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/schedules/{id}/trigger:
+    post:
+      tags:
+        - Schedules
+      summary: Trigger a scheduled scan immediately
+      description: Manually trigger a scheduled scan to run immediately, regardless of its cron schedule.
+      operationId: triggerSchedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Schedule UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scan triggered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Scan triggered
+                  scan_id:
+                    type: string
+                    format: uuid
+                    description: UUID of the created scan
+        '400':
+          description: Invalid schedule ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Schedule not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from the login or register endpoints
+
+  schemas:
+    # Enums
+    AssetType:
+      type: string
+      enum:
+        - domain
+        - subdomain
+        - ip
+        - cidr
+        - bucket
+        - container
+        - endpoint
+      description: |
+        Type of asset:
+        - `domain`: Root domain name
+        - `subdomain`: Subdomain of a domain
+        - `ip`: IP address
+        - `cidr`: IP CIDR range
+        - `bucket`: Cloud storage bucket
+        - `container`: Container image or instance
+        - `endpoint`: HTTP endpoint URL
+
+    ScanType:
+      type: string
+      enum:
+        - discovery
+        - port_scan
+        - http_probe
+        - crawl
+        - vuln_check
+        - full
+      description: |
+        Type of security scan:
+        - `discovery`: Cloud asset discovery
+        - `port_scan`: TCP/UDP port scanning
+        - `http_probe`: HTTP service probing
+        - `crawl`: Web application crawling
+        - `vuln_check`: Vulnerability checking
+        - `full`: Complete scan pipeline
+
+    ScanStatus:
+      type: string
+      enum:
+        - pending
+        - running
+        - completed
+        - failed
+        - cancelled
+      description: |
+        Current status of a scan:
+        - `pending`: Queued for execution
+        - `running`: Currently executing
+        - `completed`: Finished successfully
+        - `failed`: Terminated with error
+        - `cancelled`: Cancelled by user
+
+    Severity:
+      type: string
+      enum:
+        - info
+        - low
+        - medium
+        - high
+        - critical
+      description: |
+        Severity level of a finding:
+        - `info`: Informational, no risk
+        - `low`: Low risk
+        - `medium`: Medium risk
+        - `high`: High risk
+        - `critical`: Critical risk, immediate action required
+
+    FindingStatus:
+      type: string
+      enum:
+        - open
+        - acknowledged
+        - fixed
+        - false_positive
+        - accepted
+      description: |
+        Current status of a finding:
+        - `open`: Not yet addressed
+        - `acknowledged`: Reviewed but not fixed
+        - `fixed`: Remediated
+        - `false_positive`: Not a real issue
+        - `accepted`: Risk accepted
+
+    ProviderType:
+      type: string
+      enum:
+        - aws
+        - gcp
+        - azure
+        - digitalocean
+        - cloudflare
+      description: Supported cloud providers
+
+    # Request schemas
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          example: securepassword123
+        name:
+          type: string
+          maxLength: 100
+          example: John Doe
+        org_name:
+          type: string
+          maxLength: 100
+          description: Organization name (optional, defaults to user's name + "'s Organization")
+          example: Acme Corp
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: securepassword123
+
+    CreateCredentialRequest:
+      type: object
+      required:
+        - name
+        - provider
+        - data
+      properties:
+        name:
+          type: string
+          description: Display name for the credential
+          example: Production AWS
+        provider:
+          $ref: '#/components/schemas/ProviderType'
+        data:
+          type: object
+          description: Provider-specific credential data
+          additionalProperties: true
+          example:
+            access_key_id: AKIAIOSFODNN7EXAMPLE
+            secret_access_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+            region: us-east-1
+
+    CreateAssetRequest:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          $ref: '#/components/schemas/AssetType'
+        value:
+          type: string
+          description: Asset value (domain name, IP address, bucket name, etc.)
+          example: example.com
+        source:
+          type: string
+          description: How the asset was discovered
+          default: manual
+          example: manual
+        metadata:
+          type: string
+          description: JSON metadata string
+          default: '{}'
+          example: '{"notes": "Primary domain"}'
+        parent_id:
+          type: string
+          format: uuid
+          description: Parent asset UUID for hierarchical relationships
+
+    CreateScanRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          $ref: '#/components/schemas/ScanType'
+        target_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Asset UUIDs to scan (required for port_scan, http_probe, crawl, vuln_check)
+        credential_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Credential UUIDs to use (required for discovery and full scans)
+        config:
+          type: string
+          description: JSON configuration string
+          default: '{}'
+
+    UpdateFindingStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/FindingStatus'
+
+    CreateScheduleRequest:
+      type: object
+      required:
+        - name
+        - cron_expr
+        - scan_type
+      properties:
+        name:
+          type: string
+          description: Display name for the schedule
+          example: Daily Discovery
+        cron_expr:
+          type: string
+          description: Cron expression for scheduling (e.g., "0 2 * * *" for daily at 2 AM)
+          example: 0 2 * * *
+        scan_type:
+          $ref: '#/components/schemas/ScanType'
+        target_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Asset UUIDs to scan
+        credential_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Credential UUIDs to use
+        config:
+          type: string
+          description: JSON configuration string
+          default: '{}'
+
+    UpdateScheduleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Display name for the schedule
+        cron_expr:
+          type: string
+          description: Cron expression for scheduling
+        is_enabled:
+          type: boolean
+          description: Whether the schedule is active
+        target_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        credential_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        config:
+          type: string
+          description: JSON configuration string
+
+    # Response schemas
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/UserDTO'
+
+    UserDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - member
+        organization_id:
+          type: string
+          format: uuid
+        org_name:
+          type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        organization_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum:
+            - owner
+            - admin
+            - member
+        is_active:
+          type: boolean
+        email_verified:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        organization:
+          $ref: '#/components/schemas/Organization'
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+          enum:
+            - free
+            - pro
+            - enterprise
+        max_users:
+          type: integer
+        max_assets:
+          type: integer
+        max_scans_day:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Credential:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        provider:
+          $ref: '#/components/schemas/ProviderType'
+        is_active:
+          type: boolean
+        last_used:
+          type: integer
+          format: int64
+          description: Unix timestamp of last use
+        created_at:
+          type: string
+          format: date-time
+
+    Asset:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/AssetType'
+        value:
+          type: string
+        source:
+          type: string
+        metadata:
+          type: string
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        credential_id:
+          type: string
+          format: uuid
+          nullable: true
+        is_active:
+          type: boolean
+        discovered_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        last_seen_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        created_at:
+          type: string
+          format: date-time
+
+    Scan:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/ScanType'
+        status:
+          $ref: '#/components/schemas/ScanStatus'
+        target_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        credential_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        started_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        completed_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        error:
+          type: string
+          description: Error message if scan failed
+        assets_scanned:
+          type: integer
+        findings_count:
+          type: integer
+        ports_open:
+          type: integer
+        services_found:
+          type: integer
+        config:
+          type: string
+          description: JSON configuration string
+        task_id:
+          type: string
+          description: Async task queue ID
+        created_at:
+          type: string
+          format: date-time
+
+    Finding:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        asset_id:
+          type: string
+          format: uuid
+        scan_id:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+        severity:
+          $ref: '#/components/schemas/Severity'
+        status:
+          $ref: '#/components/schemas/FindingStatus'
+        type:
+          type: string
+          description: Finding type (e.g., open_port, exposed_bucket)
+        category:
+          type: string
+          description: Finding category (e.g., network, cloud, web)
+        evidence:
+          type: string
+        port:
+          type: integer
+        protocol:
+          type: string
+          description: tcp or udp
+        service:
+          type: string
+          description: Detected service name
+        banner:
+          type: string
+          description: Service banner
+        remediation:
+          type: string
+        references:
+          type: string
+          description: JSON array of reference URLs
+        first_seen_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        last_seen_at:
+          type: integer
+          format: int64
+          description: Unix timestamp
+        resolved_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when resolved
+        acknowledged_at:
+          type: integer
+          format: int64
+          description: Unix timestamp when acknowledged
+        created_at:
+          type: string
+          format: date-time
+
+    Schedule:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        cron_expr:
+          type: string
+          description: Cron expression
+        scan_type:
+          $ref: '#/components/schemas/ScanType'
+        is_enabled:
+          type: boolean
+        target_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        credential_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        next_run_at:
+          type: integer
+          format: int64
+          description: Unix timestamp of next scheduled run
+        last_run_at:
+          type: integer
+          format: int64
+          nullable: true
+          description: Unix timestamp of last run
+        last_scan_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the most recent scan
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # Common response schemas
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Operation successful
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: Validation failed
+        details:
+          type: object
+          additionalProperties:
+            type: string
+          description: Field-specific validation errors
+          example:
+            email: Email is required
+            password: Password must be at least 8 characters
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+          description: Array of items
+        total:
+          type: integer
+          format: int64
+          description: Total number of items
+          example: 100
+        page:
+          type: integer
+          description: Current page number
+          example: 1
+        per_page:
+          type: integer
+          description: Items per page
+          example: 20
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 5
