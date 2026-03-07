@@ -60,6 +60,7 @@ type AssetResponse struct {
 	Value        string  `json:"value"`
 	Source       string  `json:"source,omitempty"`
 	Metadata     string  `json:"metadata,omitempty"`
+	Tags         string  `json:"tags,omitempty"`
 	ParentID     *string `json:"parent_id,omitempty"`
 	CredentialID *string `json:"credential_id,omitempty"`
 	IsActive     bool    `json:"is_active"`
@@ -75,6 +76,7 @@ func assetToResponse(asset *models.Asset) AssetResponse {
 		Value:        asset.Value,
 		Source:       asset.Source,
 		Metadata:     asset.Metadata,
+		Tags:         asset.Tags,
 		IsActive:     asset.IsActive,
 		DiscoveredAt: asset.DiscoveredAt,
 		LastSeenAt:   asset.LastSeenAt,
@@ -101,6 +103,8 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	assetType := r.URL.Query().Get("type")
 	isActive := r.URL.Query().Get("is_active")
+	tagKey := r.URL.Query().Get("tag_key")
+	tagValue := r.URL.Query().Get("tag_value")
 
 	query := h.db.Model(&models.Asset{}).Where("organization_id = ?", orgID)
 
@@ -110,6 +114,11 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	if isActive != "" {
 		active := isActive == "true"
 		query = query.Where("is_active = ?", active)
+	}
+	if tagKey != "" && tagValue != "" {
+		query = query.Where("tags->>? = ?", tagKey, tagValue)
+	} else if tagKey != "" {
+		query = query.Where("jsonb_exists(tags::jsonb, ?)", tagKey)
 	}
 
 	var total int64
@@ -248,4 +257,49 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, dto.SuccessResponse{Message: "Asset deleted"})
+}
+
+type UpdateTagsRequest struct {
+	Tags map[string]string `json:"tags"`
+}
+
+func (h *AssetHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.GetOrganizationID(r.Context())
+	assetIDStr := chi.URLParam(r, "id")
+
+	assetID, err := uuid.Parse(assetIDStr)
+	if err != nil {
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid asset ID"))
+		return
+	}
+
+	var req UpdateTagsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
+		return
+	}
+
+	tagsJSON, err := json.Marshal(req.Tags)
+	if err != nil {
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid tags format"))
+		return
+	}
+
+	var asset models.Asset
+	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
+			return
+		}
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get asset", err))
+		return
+	}
+
+	if err := h.db.Model(&asset).Update("tags", string(tagsJSON)).Error; err != nil {
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update tags", err))
+		return
+	}
+
+	asset.Tags = string(tagsJSON)
+	writeJSON(w, http.StatusOK, assetToResponse(&asset))
 }

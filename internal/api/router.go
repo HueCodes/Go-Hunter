@@ -52,6 +52,7 @@ func NewRouter(cfg RouterConfig) *Router {
 
 	// Global middleware
 	r.Use(middleware.Recovery(cfg.Logger))
+	r.Use(middleware.Compress)
 	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.Logging(cfg.Logger))
 
@@ -152,6 +153,7 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Get("/", assetHandler.List)
 				r.Post("/", assetHandler.Create)
 				r.Get("/{id}", assetHandler.Get)
+				r.Put("/{id}/tags", assetHandler.UpdateTags)
 				r.Delete("/{id}", assetHandler.Delete)
 			})
 

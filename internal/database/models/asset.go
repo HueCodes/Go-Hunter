@@ -31,6 +31,9 @@ type Asset struct {
 	// Additional metadata (JSON)
 	Metadata string `gorm:"type:jsonb;default:'{}'" json:"metadata,omitempty"`
 
+	// Tags for categorization (JSON object of key:value pairs)
+	Tags string `gorm:"type:jsonb;default:'{}'" json:"tags,omitempty"`
+
 	// Parent relationship (e.g., subdomain -> domain)
 	ParentID *uuid.UUID `gorm:"type:uuid;index" json:"parent_id,omitempty"`
 
