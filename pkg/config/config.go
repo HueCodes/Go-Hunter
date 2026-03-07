@@ -35,6 +35,7 @@ type DatabaseConfig struct {
 	MaxOpenConns       int
 	MaxIdleConns       int
 	ConnMaxLifetimeMin int
+	ConnMaxIdleTimeSec int
 }
 
 type RedisConfig struct {
@@ -102,6 +103,7 @@ func Load() (*Config, error) {
 	v.SetDefault("DATABASE_MAX_OPEN_CONNS", 25)
 	v.SetDefault("DATABASE_MAX_IDLE_CONNS", 10)
 	v.SetDefault("DATABASE_CONN_MAX_LIFETIME_MIN", 30)
+	v.SetDefault("DATABASE_CONN_MAX_IDLE_TIME_SEC", 300)
 	v.SetDefault("REDIS_HOST", "localhost")
 	v.SetDefault("REDIS_PORT", 6379)
 	v.SetDefault("REDIS_PASSWORD", "")
@@ -144,6 +146,7 @@ func Load() (*Config, error) {
 			MaxOpenConns:       v.GetInt("DATABASE_MAX_OPEN_CONNS"),
 			MaxIdleConns:       v.GetInt("DATABASE_MAX_IDLE_CONNS"),
 			ConnMaxLifetimeMin: v.GetInt("DATABASE_CONN_MAX_LIFETIME_MIN"),
+			ConnMaxIdleTimeSec: v.GetInt("DATABASE_CONN_MAX_IDLE_TIME_SEC"),
 		},
 		Redis: RedisConfig{
 			Host:     v.GetString("REDIS_HOST"),
@@ -163,6 +166,10 @@ func Load() (*Config, error) {
 		},
 	}
 
+	if err := cfg.validate(); err != nil {
+		return nil, fmt.Errorf("config validation: %w", err)
+	}
+
 	if cfg.Server.IsProduction() {
 		if err := cfg.validateProduction(); err != nil {
 			return nil, fmt.Errorf("production config validation: %w", err)
@@ -170,6 +177,48 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func (c *Config) validate() error {
+	if c.Server.Port < 1 || c.Server.Port > 65535 {
+		return fmt.Errorf("SERVER_PORT must be between 1 and 65535, got %d", c.Server.Port)
+	}
+	if c.Database.Port < 1 || c.Database.Port > 65535 {
+		return fmt.Errorf("DATABASE_PORT must be between 1 and 65535, got %d", c.Database.Port)
+	}
+	if c.Redis.Port < 1 || c.Redis.Port > 65535 {
+		return fmt.Errorf("REDIS_PORT must be between 1 and 65535, got %d", c.Redis.Port)
+	}
+	if c.Database.Host == "" {
+		return fmt.Errorf("DATABASE_HOST must not be empty")
+	}
+	if c.Database.Name == "" {
+		return fmt.Errorf("DATABASE_NAME must not be empty")
+	}
+	if c.Database.User == "" {
+		return fmt.Errorf("DATABASE_USER must not be empty")
+	}
+	validSSLModes := map[string]bool{
+		"disable": true, "allow": true, "prefer": true,
+		"require": true, "verify-ca": true, "verify-full": true,
+	}
+	if !validSSLModes[c.Database.SSLMode] {
+		return fmt.Errorf("DATABASE_SSLMODE must be one of: disable, allow, prefer, require, verify-ca, verify-full")
+	}
+	if c.JWT.ExpiryHours < 1 {
+		return fmt.Errorf("JWT_EXPIRY_HOURS must be at least 1")
+	}
+	if c.Server.RequestTimeoutSec < 1 {
+		return fmt.Errorf("SERVER_REQUEST_TIMEOUT_SEC must be at least 1")
+	}
+	if c.Server.MaxBodyBytes < 1024 {
+		return fmt.Errorf("SERVER_MAX_BODY_BYTES must be at least 1024")
+	}
+	validEnvs := map[string]bool{"development": true, "staging": true, "production": true, "test": true}
+	if !validEnvs[c.Server.Env] {
+		return fmt.Errorf("SERVER_ENV must be one of: development, staging, production, test")
+	}
+	return nil
 }
 
 func (c *Config) validateProduction() error {
@@ -181,6 +230,9 @@ func (c *Config) validateProduction() error {
 	}
 	if c.Database.Password == "gohunter_secret" {
 		return fmt.Errorf("DATABASE_PASSWORD must not use default value in production")
+	}
+	if c.Database.SSLMode == "disable" {
+		return fmt.Errorf("DATABASE_SSLMODE must not be 'disable' in production")
 	}
 	return nil
 }

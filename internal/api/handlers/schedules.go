@@ -12,6 +12,7 @@ import (
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/database/models"
 	"github.com/hugh/go-hunter/internal/tasks"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"github.com/hugh/go-hunter/pkg/util"
 	"gorm.io/gorm"
 )
@@ -25,7 +26,6 @@ func NewScheduleHandler(db *gorm.DB, asynqClient *asynq.Client) *ScheduleHandler
 	return &ScheduleHandler{db: db, asynqClient: asynqClient}
 }
 
-// CreateScheduleRequest represents the request to create a scheduled scan
 type CreateScheduleRequest struct {
 	Name           string      `json:"name"`
 	CronExpr       string      `json:"cron_expr"`
@@ -58,7 +58,6 @@ func (r CreateScheduleRequest) Validate() map[string]string {
 	return errors
 }
 
-// UpdateScheduleRequest represents the request to update a scheduled scan
 type UpdateScheduleRequest struct {
 	Name           *string      `json:"name,omitempty"`
 	CronExpr       *string      `json:"cron_expr,omitempty"`
@@ -68,7 +67,6 @@ type UpdateScheduleRequest struct {
 	Config         *string      `json:"config,omitempty"`
 }
 
-// ScheduleResponse represents a scheduled scan in API responses
 type ScheduleResponse struct {
 	ID             string      `json:"id"`
 	Name           string      `json:"name"`
@@ -105,29 +103,23 @@ func toScheduleResponse(s models.ScheduledScan) ScheduleResponse {
 	return resp
 }
 
-// Create creates a new scheduled scan
 func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	var req CreateScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
-	// Calculate next run time
 	nextRun, err := util.NextCronTime(req.CronExpr, time.Now())
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid cron expression"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid cron expression"))
 		return
 	}
 
@@ -144,26 +136,21 @@ func (h *ScheduleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&schedule).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to create schedule"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create schedule", err))
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, toScheduleResponse(schedule))
 }
 
-// List returns all scheduled scans for the organization
 func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	var schedules []models.ScheduledScan
 	if err := h.db.Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Find(&schedules).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to fetch schedules"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to fetch schedules", err))
 		return
 	}
 
@@ -175,68 +162,64 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// Get returns a specific scheduled scan
 func (h *ScheduleHandler) Get(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid schedule ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid schedule ID"))
 		return
 	}
 
 	var schedule models.ScheduledScan
 	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
-		writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Schedule not found"})
+		if err == gorm.ErrRecordNotFound {
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
+			return
+		}
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get schedule", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, toScheduleResponse(schedule))
 }
 
-// Update updates a scheduled scan
 func (h *ScheduleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid schedule ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid schedule ID"))
 		return
 	}
 
 	var schedule models.ScheduledScan
 	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
-		writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Schedule not found"})
+		if err == gorm.ErrRecordNotFound {
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
+			return
+		}
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get schedule", err))
 		return
 	}
 
 	var req UpdateScheduleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	// Apply updates
 	if req.Name != nil {
 		schedule.Name = *req.Name
 	}
 	if req.CronExpr != nil {
 		if err := util.ValidateCronExpr(*req.CronExpr); err != nil {
-			writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid cron expression"})
+			apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid cron expression"))
 			return
 		}
 		schedule.CronExpr = *req.CronExpr
-		// Recalculate next run time
 		nextRun, _ := util.NextCronTime(*req.CronExpr, time.Now())
 		schedule.NextRunAt = nextRun.Unix()
 	}
@@ -254,63 +237,56 @@ func (h *ScheduleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Save(&schedule).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to update schedule"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update schedule", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, toScheduleResponse(schedule))
 }
 
-// Delete soft-deletes a scheduled scan
 func (h *ScheduleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid schedule ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid schedule ID"))
 		return
 	}
 
 	result := h.db.Where("id = ? AND organization_id = ?", id, orgID).
 		Delete(&models.ScheduledScan{})
 	if result.Error != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to delete schedule"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to delete schedule", result.Error))
 		return
 	}
 	if result.RowsAffected == 0 {
-		writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Schedule not found"})
+		apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, dto.SuccessResponse{Message: "Schedule deleted"})
 }
 
-// Trigger manually triggers a scheduled scan to run immediately
 func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
-	if orgID == uuid.Nil {
-		writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Unauthorized"})
-		return
-	}
 
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid schedule ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid schedule ID"))
 		return
 	}
 
 	var schedule models.ScheduledScan
 	if err := h.db.Where("id = ? AND organization_id = ?", id, orgID).
 		First(&schedule).Error; err != nil {
-		writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Schedule not found"})
+		if err == gorm.ErrRecordNotFound {
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Schedule"))
+			return
+		}
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get schedule", err))
 		return
 	}
 
-	// Create a scan from the schedule
 	scan := models.Scan{
 		OrganizationID: schedule.OrganizationID,
 		Type:           schedule.ScanType,
@@ -321,14 +297,13 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&scan).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to create scan"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create scan", err))
 		return
 	}
 
-	// Enqueue the task
 	if h.asynqClient != nil {
 		task, err := createScanTask(scan)
-		if err == nil {
+		if err == nil && task != nil {
 			info, err := h.asynqClient.Enqueue(task)
 			if err == nil {
 				_ = h.db.Model(&scan).Update("task_id", info.ID)
@@ -336,7 +311,6 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update schedule's last run info
 	now := time.Now().Unix()
 	_ = h.db.Model(&schedule).Updates(map[string]interface{}{
 		"last_run_at":  now,
@@ -349,7 +323,6 @@ func (h *ScheduleHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// createScanTask creates an asynq task for a scan
 func createScanTask(scan models.Scan) (*asynq.Task, error) {
 	switch scan.Type {
 	case models.ScanTypeDiscovery:

@@ -11,6 +11,7 @@ import (
 	"github.com/hugh/go-hunter/internal/api/dto"
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/database/models"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,6 @@ func NewAssetHandler(db *gorm.DB) *AssetHandler {
 	return &AssetHandler{db: db}
 }
 
-// CreateAssetRequest represents the request to create an asset
 type CreateAssetRequest struct {
 	Type     string  `json:"type"`
 	Value    string  `json:"value"`
@@ -54,7 +54,6 @@ func (r CreateAssetRequest) Validate() map[string]string {
 	return errors
 }
 
-// AssetResponse represents an asset in API responses
 type AssetResponse struct {
 	ID           string  `json:"id"`
 	Type         string  `json:"type"`
@@ -92,21 +91,17 @@ func assetToResponse(asset *models.Asset) AssetResponse {
 	return resp
 }
 
-// List handles GET /api/v1/assets
 func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
-	// Parse pagination
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 	pagination := dto.PaginationParams{Page: page, PerPage: perPage}
 	pagination.Normalize()
 
-	// Parse filters
 	assetType := r.URL.Query().Get("type")
 	isActive := r.URL.Query().Get("is_active")
 
-	// Build query
 	query := h.db.Model(&models.Asset{}).Where("organization_id = ?", orgID)
 
 	if assetType != "" {
@@ -117,25 +112,22 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("is_active = ?", active)
 	}
 
-	// Get total count
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to count assets"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to count assets", err))
 		return
 	}
 
-	// Get paginated results
 	var assets []models.Asset
 	if err := query.
 		Order("created_at DESC").
 		Offset(pagination.Offset()).
 		Limit(pagination.PerPage).
 		Find(&assets).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to list assets"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to list assets", err))
 		return
 	}
 
-	// Convert to response
 	response := make([]AssetResponse, len(assets))
 	for i, asset := range assets {
 		response[i] = assetToResponse(&asset)
@@ -155,18 +147,17 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Create handles POST /api/v1/assets
 func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
 	var req CreateAssetRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
@@ -193,70 +184,66 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	if req.ParentID != nil && *req.ParentID != "" {
 		parentID, _ := uuid.Parse(*req.ParentID)
-		// Verify parent exists and belongs to same org
 		var parent models.Asset
 		if err := h.db.Where("id = ? AND organization_id = ?", parentID, orgID).First(&parent).Error; err != nil {
-			writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Parent asset not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Parent asset"))
 			return
 		}
 		asset.ParentID = &parentID
 	}
 
 	if err := h.db.Create(&asset).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to create asset"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create asset", err))
 		return
 	}
 
 	writeJSON(w, http.StatusCreated, assetToResponse(&asset))
 }
 
-// Get handles GET /api/v1/assets/:id
 func (h *AssetHandler) Get(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	assetIDStr := chi.URLParam(r, "id")
 
 	assetID, err := uuid.Parse(assetIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid asset ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid asset ID"))
 		return
 	}
 
 	var asset models.Asset
 	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Asset not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to get asset"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get asset", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, assetToResponse(&asset))
 }
 
-// Delete handles DELETE /api/v1/assets/:id
 func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	assetIDStr := chi.URLParam(r, "id")
 
 	assetID, err := uuid.Parse(assetIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid asset ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid asset ID"))
 		return
 	}
 
-	// Soft delete by setting is_active to false
 	result := h.db.Model(&models.Asset{}).
 		Where("id = ? AND organization_id = ?", assetID, orgID).
 		Update("is_active", false)
 
 	if result.Error != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to delete asset"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to delete asset", result.Error))
 		return
 	}
 
 	if result.RowsAffected == 0 {
-		writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Asset not found"})
+		apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
 		return
 	}
 

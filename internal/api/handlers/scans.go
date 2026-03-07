@@ -13,6 +13,7 @@ import (
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/database/models"
 	"github.com/hugh/go-hunter/internal/tasks"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -25,7 +26,6 @@ func NewScanHandler(db *gorm.DB, asynqClient *asynq.Client) *ScanHandler {
 	return &ScanHandler{db: db, asynqClient: asynqClient}
 }
 
-// CreateScanRequest represents the request to create a scan
 type CreateScanRequest struct {
 	Type           string   `json:"type"`
 	TargetAssetIDs []string `json:"target_asset_ids,omitempty"`
@@ -43,7 +43,6 @@ func (r CreateScanRequest) Validate() map[string]string {
 		errors["type"] = "Invalid scan type"
 	}
 
-	// Validate UUIDs
 	for i, id := range r.TargetAssetIDs {
 		if _, err := uuid.Parse(id); err != nil {
 			errors["target_asset_ids"] = "Invalid asset ID at index " + strconv.Itoa(i)
@@ -57,7 +56,6 @@ func (r CreateScanRequest) Validate() map[string]string {
 		}
 	}
 
-	// Discovery requires credentials
 	if r.Type == "discovery" && len(r.CredentialIDs) == 0 {
 		errors["credential_ids"] = "Discovery scan requires at least one credential"
 	}
@@ -65,7 +63,6 @@ func (r CreateScanRequest) Validate() map[string]string {
 	return errors
 }
 
-// ScanResponse represents a scan in API responses
 type ScanResponse struct {
 	ID             string   `json:"id"`
 	Type           string   `json:"type"`
@@ -113,21 +110,17 @@ func scanToResponse(scan *models.Scan) ScanResponse {
 	}
 }
 
-// List handles GET /api/v1/scans
 func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
-	// Parse pagination
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 	pagination := dto.PaginationParams{Page: page, PerPage: perPage}
 	pagination.Normalize()
 
-	// Parse filters
 	status := r.URL.Query().Get("status")
 	scanType := r.URL.Query().Get("type")
 
-	// Build query
 	query := h.db.Model(&models.Scan{}).Where("organization_id = ?", orgID)
 
 	if status != "" {
@@ -137,25 +130,22 @@ func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("type = ?", scanType)
 	}
 
-	// Get total count
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to count scans"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to count scans", err))
 		return
 	}
 
-	// Get paginated results
 	var scans []models.Scan
 	if err := query.
 		Order("created_at DESC").
 		Offset(pagination.Offset()).
 		Limit(pagination.PerPage).
 		Find(&scans).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to list scans"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to list scans", err))
 		return
 	}
 
-	// Convert to response
 	response := make([]ScanResponse, len(scans))
 	for i, scan := range scans {
 		response[i] = scanToResponse(&scan)
@@ -175,22 +165,20 @@ func (h *ScanHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Create handles POST /api/v1/scans
 func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
 	var req CreateScanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
-	// Convert string IDs to UUIDs
 	targetAssetIDs := make([]uuid.UUID, len(req.TargetAssetIDs))
 	for i, id := range req.TargetAssetIDs {
 		targetAssetIDs[i], _ = uuid.Parse(id)
@@ -200,51 +188,47 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 		credentialIDs[i], _ = uuid.Parse(id)
 	}
 
-	// Verify credentials belong to org
 	if len(credentialIDs) > 0 {
 		var count int64
 		h.db.Model(&models.CloudCredential{}).
 			Where("id IN ? AND organization_id = ?", credentialIDs, orgID).
 			Count(&count)
 		if count != int64(len(credentialIDs)) {
-			writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "One or more credentials not found"})
+			apperrors.WriteHTTP(w, r, apperrors.BadRequest("One or more credentials not found"))
 			return
 		}
 	}
 
-	// Verify assets belong to org
 	if len(targetAssetIDs) > 0 {
 		var count int64
 		h.db.Model(&models.Asset{}).
 			Where("id IN ? AND organization_id = ?", targetAssetIDs, orgID).
 			Count(&count)
 		if count != int64(len(targetAssetIDs)) {
-			writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "One or more assets not found"})
+			apperrors.WriteHTTP(w, r, apperrors.BadRequest("One or more assets not found"))
 			return
 		}
 	}
 
-	config := req.Config
-	if config == "" {
-		config = "{}"
+	scanConfig := req.Config
+	if scanConfig == "" {
+		scanConfig = "{}"
 	}
 
-	// Create scan record
 	scan := models.Scan{
 		OrganizationID: orgID,
 		Type:           models.ScanType(req.Type),
 		Status:         models.ScanStatusPending,
 		TargetAssetIDs: targetAssetIDs,
 		CredentialIDs:  credentialIDs,
-		Config:         config,
+		Config:         scanConfig,
 	}
 
 	if err := h.db.Create(&scan).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to create scan"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create scan", err))
 		return
 	}
 
-	// Enqueue task based on scan type
 	var task *asynq.Task
 	var err error
 
@@ -284,10 +268,9 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 			ScanID:         scan.ID,
 			OrganizationID: orgID,
 			AssetIDs:       targetAssetIDs,
-			CheckTypes:     []string{}, // Run all checks
+			CheckTypes:     []string{},
 		})
 	case models.ScanTypeFull:
-		// For full scan, start with discovery
 		task, err = tasks.NewAssetDiscoveryTask(tasks.AssetDiscoveryPayload{
 			ScanID:         scan.ID,
 			OrganizationID: orgID,
@@ -296,18 +279,16 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to create scan task"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to create scan task", err))
 		return
 	}
 
-	// Enqueue task if asynq client is available
-	if h.asynqClient != nil {
+	if h.asynqClient != nil && task != nil {
 		info, err := h.asynqClient.Enqueue(task)
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to enqueue scan task"})
+			apperrors.WriteHTTP(w, r, apperrors.Unavailable("Failed to enqueue scan task — queue service unavailable"))
 			return
 		}
-		// Update scan with task ID
 		h.db.Model(&scan).Update("task_id", info.ID)
 		scan.TaskID = info.ID
 	}
@@ -315,60 +296,54 @@ func (h *ScanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, scanToResponse(&scan))
 }
 
-// Get handles GET /api/v1/scans/:id
 func (h *ScanHandler) Get(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	scanIDStr := chi.URLParam(r, "id")
 
 	scanID, err := uuid.Parse(scanIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid scan ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid scan ID"))
 		return
 	}
 
 	var scan models.Scan
 	if err := h.db.Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Scan not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Scan"))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to get scan"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get scan", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, scanToResponse(&scan))
 }
 
-// Cancel handles POST /api/v1/scans/:id/cancel
 func (h *ScanHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	scanIDStr := chi.URLParam(r, "id")
 
 	scanID, err := uuid.Parse(scanIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid scan ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid scan ID"))
 		return
 	}
 
 	var scan models.Scan
 	if err := h.db.Where("id = ? AND organization_id = ?", scanID, orgID).First(&scan).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Scan not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Scan"))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to get scan"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get scan", err))
 		return
 	}
 
-	// Can only cancel pending or running scans
 	if scan.Status != models.ScanStatusPending && scan.Status != models.ScanStatusRunning {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{
-			Error: "Can only cancel pending or running scans",
-		})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Can only cancel pending or running scans"))
 		return
 	}
 
-	// Update status
 	updates := map[string]interface{}{
 		"status":       models.ScanStatusCancelled,
 		"completed_at": time.Now().Unix(),
@@ -376,7 +351,7 @@ func (h *ScanHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Model(&scan).Updates(updates).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to cancel scan"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to cancel scan", err))
 		return
 	}
 

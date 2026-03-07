@@ -11,6 +11,7 @@ import (
 	"github.com/hugh/go-hunter/internal/api/dto"
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/database/models"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,6 @@ func NewFindingHandler(db *gorm.DB) *FindingHandler {
 	return &FindingHandler{db: db}
 }
 
-// FindingResponse represents a finding in API responses
 type FindingResponse struct {
 	ID             string  `json:"id"`
 	AssetID        string  `json:"asset_id"`
@@ -76,23 +76,19 @@ func findingToResponse(finding *models.Finding) FindingResponse {
 	return resp
 }
 
-// List handles GET /api/v1/findings
 func (h *FindingHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 
-	// Parse pagination
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	perPage, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
 	pagination := dto.PaginationParams{Page: page, PerPage: perPage}
 	pagination.Normalize()
 
-	// Parse filters
 	severity := r.URL.Query().Get("severity")
 	status := r.URL.Query().Get("status")
 	assetID := r.URL.Query().Get("asset_id")
 	findingType := r.URL.Query().Get("type")
 
-	// Build query
 	query := h.db.Model(&models.Finding{}).Where("organization_id = ?", orgID)
 
 	if severity != "" {
@@ -110,25 +106,22 @@ func (h *FindingHandler) List(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("type = ?", findingType)
 	}
 
-	// Get total count
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to count findings"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to count findings", err))
 		return
 	}
 
-	// Get paginated results
 	var findings []models.Finding
 	if err := query.
 		Order("severity DESC, created_at DESC").
 		Offset(pagination.Offset()).
 		Limit(pagination.PerPage).
 		Find(&findings).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to list findings"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to list findings", err))
 		return
 	}
 
-	// Convert to response
 	response := make([]FindingResponse, len(findings))
 	for i, finding := range findings {
 		response[i] = findingToResponse(&finding)
@@ -148,14 +141,13 @@ func (h *FindingHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Get handles GET /api/v1/findings/:id
 func (h *FindingHandler) Get(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	findingIDStr := chi.URLParam(r, "id")
 
 	findingID, err := uuid.Parse(findingIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid finding ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid finding ID"))
 		return
 	}
 
@@ -165,17 +157,16 @@ func (h *FindingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Where("id = ? AND organization_id = ?", findingID, orgID).
 		First(&finding).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Finding not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Finding"))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to get finding"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get finding", err))
 		return
 	}
 
 	writeJSON(w, http.StatusOK, findingToResponse(&finding))
 }
 
-// UpdateStatusRequest represents the request to update finding status
 type UpdateStatusRequest struct {
 	Status string `json:"status"`
 }
@@ -192,7 +183,6 @@ func (r UpdateStatusRequest) Validate() map[string]string {
 	return errors
 }
 
-// UpdateStatus handles PUT /api/v1/findings/:id/status
 func (h *FindingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.GetOrganizationID(r.Context())
 	userID := middleware.GetUserID(r.Context())
@@ -200,33 +190,31 @@ func (h *FindingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	findingID, err := uuid.Parse(findingIDStr)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid finding ID"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid finding ID"))
 		return
 	}
 
 	var req UpdateStatusRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
-	// Get current finding
 	var finding models.Finding
 	if err := h.db.Where("id = ? AND organization_id = ?", findingID, orgID).First(&finding).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			writeJSON(w, http.StatusNotFound, dto.ErrorResponse{Error: "Finding not found"})
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Finding"))
 			return
 		}
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to get finding"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get finding", err))
 		return
 	}
 
-	// Build updates
 	updates := map[string]interface{}{
 		"status":     models.FindingStatus(req.Status),
 		"updated_at": time.Now(),
@@ -234,22 +222,19 @@ func (h *FindingHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	newStatus := models.FindingStatus(req.Status)
 
-	// Track status-specific timestamps
 	if newStatus == models.FindingStatusFixed || newStatus == models.FindingStatusFalsePositive || newStatus == models.FindingStatusAccepted {
 		updates["resolved_at"] = time.Now().Unix()
 		updates["resolved_by"] = userID
 	} else if newStatus == models.FindingStatusOpen {
-		// Reopening - clear resolved fields
 		updates["resolved_at"] = 0
 		updates["resolved_by"] = nil
 	}
 
 	if err := h.db.Model(&finding).Updates(updates).Error; err != nil {
-		writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to update finding status"})
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to update finding status", err))
 		return
 	}
 
-	// Reload finding
 	h.db.First(&finding, findingID)
 
 	writeJSON(w, http.StatusOK, findingToResponse(&finding))

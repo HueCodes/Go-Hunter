@@ -16,6 +16,7 @@ import (
 	"github.com/hugh/go-hunter/internal/assets"
 	"github.com/hugh/go-hunter/internal/auth"
 	"github.com/hugh/go-hunter/pkg/crypto"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -119,10 +120,10 @@ func NewRouter(cfg RouterConfig) *Router {
 				userID := middleware.GetUserID(r.Context())
 				user, err := cfg.AuthService.GetUserByID(r.Context(), userID)
 				if err != nil {
-					http.Error(w, "User not found", http.StatusNotFound)
+					apperrors.WriteHTTP(w, r, apperrors.NotFound("User"))
 					return
 				}
-				writeJSON(w, http.StatusOK, user)
+				apiWriteJSON(w, http.StatusOK, user)
 			})
 
 			// Credentials endpoints
@@ -191,7 +192,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	return &Router{r}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func apiWriteJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)

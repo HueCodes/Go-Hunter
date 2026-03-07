@@ -6,6 +6,7 @@ import (
 
 	"github.com/hugh/go-hunter/internal/api/dto"
 	"github.com/hugh/go-hunter/internal/auth"
+	apperrors "github.com/hugh/go-hunter/pkg/errors"
 )
 
 type AuthHandler struct {
@@ -19,12 +20,12 @@ func NewAuthHandler(authService *auth.Service) *AuthHandler {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req dto.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
@@ -38,23 +39,14 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case auth.ErrUserExists:
-			writeJSON(w, http.StatusConflict, dto.ErrorResponse{Error: "User already exists"})
+			apperrors.WriteHTTP(w, r, apperrors.Conflict("User already exists"))
 		default:
-			writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Registration failed"})
+			apperrors.WriteHTTP(w, r, apperrors.Internal("Registration failed", err))
 		}
 		return
 	}
 
-	// Set cookie for web dashboard (same as login)
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    resp.Token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400, // 24 hours
-	})
+	setAuthCookie(w, resp.Token)
 
 	writeJSON(w, http.StatusCreated, dto.AuthResponse{
 		Token: resp.Token,
@@ -72,12 +64,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req dto.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid request body"})
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid request body"))
 		return
 	}
 
-	if errors := req.Validate(); len(errors) > 0 {
-		writeJSON(w, http.StatusBadRequest, dto.ErrorResponse{Error: "Validation failed", Details: errors})
+	if errs := req.Validate(); len(errs) > 0 {
+		apperrors.WriteHTTP(w, r, apperrors.Validation(errs))
 		return
 	}
 
@@ -89,25 +81,16 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case auth.ErrInvalidCredentials:
-			writeJSON(w, http.StatusUnauthorized, dto.ErrorResponse{Error: "Invalid credentials"})
+			apperrors.WriteHTTP(w, r, apperrors.Unauthorized("Invalid credentials"))
 		case auth.ErrInactiveUser:
-			writeJSON(w, http.StatusForbidden, dto.ErrorResponse{Error: "Account is inactive"})
+			apperrors.WriteHTTP(w, r, apperrors.Forbidden("Account is inactive"))
 		default:
-			writeJSON(w, http.StatusInternalServerError, dto.ErrorResponse{Error: "Login failed"})
+			apperrors.WriteHTTP(w, r, apperrors.Internal("Login failed", err))
 		}
 		return
 	}
 
-	// Set cookie for web dashboard
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    resp.Token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   false, // Set to true in production with HTTPS
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   86400, // 24 hours
-	})
+	setAuthCookie(w, resp.Token)
 
 	writeJSON(w, http.StatusOK, dto.AuthResponse{
 		Token: resp.Token,
@@ -132,6 +115,18 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	})
 
 	writeJSON(w, http.StatusOK, dto.SuccessResponse{Message: "Logged out"})
+}
+
+func setAuthCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   86400,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {

@@ -43,11 +43,23 @@ func Connect(cfg *config.DatabaseConfig, log *slog.Logger) (*gorm.DB, error) {
 	if connMaxLifetime <= 0 {
 		connMaxLifetime = 30
 	}
+	connMaxIdleTime := cfg.ConnMaxIdleTimeSec
+	if connMaxIdleTime <= 0 {
+		connMaxIdleTime = 300
+	}
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)
 	sqlDB.SetConnMaxLifetime(time.Duration(connMaxLifetime) * time.Minute)
+	sqlDB.SetConnMaxIdleTime(time.Duration(connMaxIdleTime) * time.Second)
 
-	log.Info("connected to database", "host", cfg.Host, "database", cfg.Name)
+	log.Info("connected to database",
+		"host", cfg.Host,
+		"database", cfg.Name,
+		"max_open_conns", maxOpen,
+		"max_idle_conns", maxIdle,
+		"conn_max_lifetime_min", connMaxLifetime,
+		"conn_max_idle_time_sec", connMaxIdleTime,
+	)
 
 	return db, nil
 }
