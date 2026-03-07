@@ -79,7 +79,7 @@ func main() {
 	}
 
 	fmt.Println("\n=== Seed Complete ===")
-	fmt.Printf("Demo login: demo@gohunter.dev / GoHunter2026!\n")
+	fmt.Printf("Demo login: demo@gohunter.dev / %s\n", os.Getenv("DEMO_PASSWORD"))
 	fmt.Printf("Organization: %s (slug: %s)\n", org.Name, org.Slug)
 	fmt.Printf("User: %s (%s)\n", user.Name, user.Email)
 }
@@ -130,7 +130,11 @@ func seedDemoUser(ctx context.Context, db *gorm.DB, orgID uuid.UUID) (*models.Us
 	}
 
 	// Hash password using bcrypt
-	passwordHash, err := auth.HashPassword("GoHunter2026!")
+	demoPassword := os.Getenv("DEMO_PASSWORD")
+	if demoPassword == "" {
+		demoPassword = "GoHunter2026!"
+	}
+	passwordHash, err := auth.HashPassword(demoPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -791,7 +795,7 @@ func seedAdminUser(ctx context.Context, db *gorm.DB, cfg *config.Config) error {
 		email = "admin@example.com"
 	}
 	if password == "" {
-		password = "admin123!"
+		log.Fatal("ADMIN_PASSWORD environment variable is required for seeding")
 	}
 	if name == "" {
 		name = "Admin"

@@ -52,3 +52,21 @@ coverage.html
 LOCAL_NOTES.md
 *.local.md
 .local/
+
+# Screenshots and images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+
+# Internal planning/prompt documents
+PRODUCTIONIZE_PROMPT.md
+IMPLEMENTATION_SUMMARY.md
+NEXT_STEPS_PROMPT.md
+FOLLOW_UP_WORK.md
+README.draft.md
+
+# Profiling
+*.prof
+*.pprof
