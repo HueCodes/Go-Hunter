@@ -22,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Database ConnMaxIdleTime configuration
 - GitHub issue templates (bug report, feature request) and PR template
 - CHANGELOG.md in Keep a Changelog format
+- Request-scoped logger with correlation IDs (request_id) propagated to all downstream log entries
+- pprof profiling endpoints (`/debug/pprof/*`) for non-production environments
+- Attack surface diff engine comparing asset/finding snapshots between two time points (`GET /api/v1/diff`)
+- Compliance mapping engine with CIS AWS, SOC 2, PCI DSS, and NIST CSF frameworks (`GET /api/v1/compliance/{framework}`)
+- Risk scoring engine with composite score (findings, exposure, age) and letter grades
+- SQL migration for api_keys, audit_logs tables and assets.tags JSONB column with GIN index
+- Comprehensive tests for config validation, check runner, notification engine, circuit breaker, risk scoring, errors, diff, and compliance
 
 ### Changed
 - Hardened Content-Security-Policy with specific CDN sources, frame-ancestors, base-uri, form-action
@@ -29,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Error responses now include machine-readable `code` field
 - Auth middleware supports both JWT and API key authentication
 - Database connection pool settings logged on startup
+- All handler DB queries now use `WithContext(r.Context())` to respect request timeouts
+- Production JSON logs now include source location (`AddSource: true`)
+- Recovery middleware uses request-scoped logger for panic logging with correlation IDs
 
 ### Security
 - Internal error details never leak to API responses (logged server-side only)
