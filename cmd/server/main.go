@@ -74,6 +74,7 @@ func main() {
 	// Initialize services
 	jwtService := auth.NewJWTService(cfg.JWT.Secret, cfg.JWT.Expiry())
 	authService := auth.NewService(db, jwtService)
+	apiKeyService := auth.NewAPIKeyService(db)
 
 	// Initialize encryptor for credential storage
 	encryptor, err := crypto.NewEncryptor(cfg.Encryption.Key)
@@ -106,6 +107,7 @@ func main() {
 		Logger:         logger,
 		JWTService:     jwtService,
 		AuthService:    authService,
+		APIKeyService:  apiKeyService,
 		Encryptor:      encryptor,
 		Templates:      templates,
 		StaticFS:       staticFS,

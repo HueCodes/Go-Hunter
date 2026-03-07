@@ -32,6 +32,7 @@ type RouterConfig struct {
 	Logger         *slog.Logger
 	JWTService     *auth.JWTService
 	AuthService    *auth.Service
+	APIKeyService  *auth.APIKeyService
 	Encryptor      *crypto.Encryptor
 	Templates      *template.Template
 	StaticFS       fs.FS
@@ -88,6 +89,9 @@ func NewRouter(cfg RouterConfig) *Router {
 		MaxAge:           300,
 	}))
 
+	// Login brute-force protection
+	loginLimiter := middleware.NewLoginLimiter(5, 1*time.Minute)
+
 	// Initialize services
 	assetService := assets.NewService(cfg.DB, cfg.Encryptor, cfg.Logger)
 
@@ -100,6 +104,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	scanHandler := handlers.NewScanHandler(cfg.DB, cfg.AsynqClient)
 	findingHandler := handlers.NewFindingHandler(cfg.DB)
 	scheduleHandler := handlers.NewScheduleHandler(cfg.DB, cfg.AsynqClient)
+	apiKeyHandler := handlers.NewAPIKeyHandler(cfg.APIKeyService)
 
 	// Metrics middleware (must be after recovery, before routes)
 	r.Use(middleware.Metrics)
@@ -113,12 +118,15 @@ func NewRouter(cfg RouterConfig) *Router {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth endpoints
 		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
+		r.Group(func(r chi.Router) {
+			r.Use(loginLimiter.Middleware())
+			r.Post("/auth/login", authHandler.Login)
+		})
 		r.Post("/auth/logout", authHandler.Logout)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.Auth(cfg.JWTService))
+			r.Use(middleware.AuthWithAPIKey(cfg.JWTService, cfg.APIKeyService))
 
 			// User endpoints
 			r.Get("/me", func(w http.ResponseWriter, r *http.Request) {
@@ -162,6 +170,14 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Put("/{id}/status", findingHandler.UpdateStatus)
 			})
 
+			// API keys endpoints
+			r.Route("/api-keys", func(r chi.Router) {
+				r.Get("/", apiKeyHandler.List)
+				r.Post("/", apiKeyHandler.Create)
+				r.Post("/{id}/revoke", apiKeyHandler.Revoke)
+				r.Delete("/{id}", apiKeyHandler.Delete)
+			})
+
 			// Schedules endpoints
 			r.Route("/schedules", func(r chi.Router) {
 				r.Get("/", scheduleHandler.List)
@@ -176,7 +192,10 @@ func NewRouter(cfg RouterConfig) *Router {
 
 	// Web dashboard routes
 	r.Get("/login", dashboardHandler.Login)
-	r.Post("/login", dashboardHandler.LoginPost)
+	r.Group(func(r chi.Router) {
+		r.Use(loginLimiter.Middleware())
+		r.Post("/login", dashboardHandler.LoginPost)
+	})
 	r.Get("/logout", dashboardHandler.Logout)
 
 	r.Group(func(r chi.Router) {

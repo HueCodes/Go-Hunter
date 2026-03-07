@@ -16,17 +16,26 @@ const (
 	OrganizationIDKey contextKey = "organization_id"
 	UserEmailKey      contextKey = "user_email"
 	UserRoleKey       contextKey = "user_role"
+	AuthMethodKey     contextKey = "auth_method"
 )
 
 func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
+	return AuthWithAPIKey(jwtService, nil)
+}
+
+func AuthWithAPIKey(jwtService *auth.JWTService, apiKeyService *auth.APIKeyService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var token string
+			var isAPIKey bool
 
-			// 1. Check Authorization header (API requests)
+			// 1. Check Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if strings.HasPrefix(authHeader, "Bearer ") {
 				token = strings.TrimPrefix(authHeader, "Bearer ")
+				if strings.HasPrefix(token, "ghk_") {
+					isAPIKey = true
+				}
 			}
 
 			// 2. Check cookie (web dashboard)
@@ -36,9 +45,12 @@ func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 				}
 			}
 
-			// 3. Check X-Auth-Token header (localStorage fallback for AJAX)
+			// 3. Check X-Auth-Token header
 			if token == "" {
 				token = r.Header.Get("X-Auth-Token")
+				if strings.HasPrefix(token, "ghk_") {
+					isAPIKey = true
+				}
 			}
 
 			if token == "" {
@@ -46,41 +58,54 @@ func Auth(jwtService *auth.JWTService) func(http.Handler) http.Handler {
 				return
 			}
 
+			// API key authentication
+			if isAPIKey && apiKeyService != nil {
+				key, err := apiKeyService.Validate(r.Context(), token)
+				if err != nil {
+					handleUnauthorized(w, r)
+					return
+				}
+
+				ctx := r.Context()
+				ctx = context.WithValue(ctx, UserIDKey, key.UserID)
+				ctx = context.WithValue(ctx, OrganizationIDKey, key.OrganizationID)
+				ctx = context.WithValue(ctx, UserRoleKey, key.Role)
+				ctx = context.WithValue(ctx, AuthMethodKey, "api_key")
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
+			// JWT authentication
 			claims, err := jwtService.ValidateToken(token)
 			if err != nil {
 				handleUnauthorized(w, r)
 				return
 			}
 
-			// Add claims to context
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, UserIDKey, claims.UserID)
 			ctx = context.WithValue(ctx, OrganizationIDKey, claims.OrganizationID)
 			ctx = context.WithValue(ctx, UserEmailKey, claims.Email)
 			ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
+			ctx = context.WithValue(ctx, AuthMethodKey, "jwt")
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-// handleUnauthorized returns appropriate response based on request type
 func handleUnauthorized(w http.ResponseWriter, r *http.Request) {
-	// Check if this is a web page request (not API)
 	accept := r.Header.Get("Accept")
 	isWebRequest := strings.Contains(accept, "text/html") && !strings.HasPrefix(r.URL.Path, "/api/")
 
 	if isWebRequest {
-		// Redirect to login for web requests
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
 
-	// Return 401 for API requests
 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
 }
 
-// Helper functions to extract values from context
 func GetUserID(ctx context.Context) uuid.UUID {
 	if id, ok := ctx.Value(UserIDKey).(uuid.UUID); ok {
 		return id
@@ -109,7 +134,13 @@ func GetUserRole(ctx context.Context) string {
 	return ""
 }
 
-// RequireRole middleware ensures user has specific role
+func GetAuthMethod(ctx context.Context) string {
+	if method, ok := ctx.Value(AuthMethodKey).(string); ok {
+		return method
+	}
+	return ""
+}
+
 func RequireRole(roles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

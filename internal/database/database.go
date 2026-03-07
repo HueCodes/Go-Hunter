@@ -72,5 +72,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Asset{},
 		&models.Scan{},
 		&models.Finding{},
+		&models.APIKey{},
 	)
 }
