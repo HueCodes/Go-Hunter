@@ -11,6 +11,7 @@ import (
 	"github.com/hugh/go-hunter/internal/api/dto"
 	"github.com/hugh/go-hunter/internal/api/middleware"
 	"github.com/hugh/go-hunter/internal/database/models"
+	"github.com/hugh/go-hunter/internal/scoring"
 	apperrors "github.com/hugh/go-hunter/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -302,4 +303,65 @@ func (h *AssetHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 
 	asset.Tags = string(tagsJSON)
 	writeJSON(w, http.StatusOK, assetToResponse(&asset))
+}
+
+func (h *AssetHandler) RiskScore(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.GetOrganizationID(r.Context())
+	assetIDStr := chi.URLParam(r, "id")
+
+	assetID, err := uuid.Parse(assetIDStr)
+	if err != nil {
+		apperrors.WriteHTTP(w, r, apperrors.BadRequest("Invalid asset ID"))
+		return
+	}
+
+	var asset models.Asset
+	if err := h.db.Where("id = ? AND organization_id = ?", assetID, orgID).First(&asset).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			apperrors.WriteHTTP(w, r, apperrors.NotFound("Asset"))
+			return
+		}
+		apperrors.WriteHTTP(w, r, apperrors.Internal("Failed to get asset", err))
+		return
+	}
+
+	// Count findings by severity
+	type severityRow struct {
+		Severity string
+		Count    int
+	}
+	var rows []severityRow
+	h.db.Model(&models.Finding{}).
+		Select("severity, count(*) as count").
+		Where("asset_id = ? AND organization_id = ? AND status = 'open'", assetID, orgID).
+		Group("severity").
+		Find(&rows)
+
+	var counts scoring.SeverityCount
+	for _, row := range rows {
+		switch row.Severity {
+		case "critical":
+			counts.Critical = row.Count
+		case "high":
+			counts.High = row.Count
+		case "medium":
+			counts.Medium = row.Count
+		case "low":
+			counts.Low = row.Count
+		case "info":
+			counts.Info = row.Count
+		}
+	}
+
+	isPublic := asset.Type == models.AssetTypeDomain ||
+		asset.Type == models.AssetTypeSubdomain ||
+		asset.Type == models.AssetTypeEndpoint
+
+	risk := scoring.Calculate(scoring.RiskInput{
+		Findings:     counts,
+		IsPublic:     isPublic,
+		DiscoveredAt: time.Unix(asset.DiscoveredAt, 0),
+	})
+
+	writeJSON(w, http.StatusOK, risk)
 }

@@ -153,6 +153,7 @@ func NewRouter(cfg RouterConfig) *Router {
 				r.Get("/", assetHandler.List)
 				r.Post("/", assetHandler.Create)
 				r.Get("/{id}", assetHandler.Get)
+				r.Get("/{id}/risk", assetHandler.RiskScore)
 				r.Put("/{id}/tags", assetHandler.UpdateTags)
 				r.Delete("/{id}", assetHandler.Delete)
 			})
