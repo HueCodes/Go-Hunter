@@ -107,6 +107,7 @@ func NewRouter(cfg RouterConfig) *Router {
 	scanHandler := handlers.NewScanHandler(cfg.DB, cfg.AsynqClient)
 	findingHandler := handlers.NewFindingHandler(cfg.DB)
 	diffHandler := handlers.NewDiffHandler(cfg.DB)
+	complianceHandler := handlers.NewComplianceHandler(cfg.DB)
 	scheduleHandler := handlers.NewScheduleHandler(cfg.DB, cfg.AsynqClient)
 	apiKeyHandler := handlers.NewAPIKeyHandler(cfg.APIKeyService)
 
@@ -195,6 +196,10 @@ func NewRouter(cfg RouterConfig) *Router {
 
 			// Attack surface diff
 			r.Get("/diff", diffHandler.Diff)
+
+			// Compliance
+			r.Get("/compliance/frameworks", complianceHandler.Frameworks)
+			r.Get("/compliance/{framework}", complianceHandler.Report)
 
 			// API keys endpoints
 			r.Route("/api-keys", func(r chi.Router) {
