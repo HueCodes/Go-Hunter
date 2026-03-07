@@ -116,6 +116,7 @@ func main() {
 		RateLimitSecs:  cfg.RateLimit.WindowSeconds,
 		RequestTimeout: time.Duration(cfg.Server.RequestTimeoutSec) * time.Second,
 		MaxBodyBytes:   cfg.Server.MaxBodyBytes,
+		EnablePprof:    !cfg.Server.IsProduction(),
 	})
 
 	// Create HTTP server

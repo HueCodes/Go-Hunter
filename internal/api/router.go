@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -42,6 +43,7 @@ type RouterConfig struct {
 	RateLimitSecs  int      // Rate limit window in seconds
 	RequestTimeout time.Duration
 	MaxBodyBytes   int64
+	EnablePprof    bool // Enable pprof profiling endpoints
 }
 
 func NewRouter(cfg RouterConfig) *Router {
@@ -114,6 +116,23 @@ func NewRouter(cfg RouterConfig) *Router {
 	r.Get("/health", healthHandler.Health)
 	r.Get("/ready", healthHandler.Ready)
 	r.Handle("/metrics", promhttp.Handler())
+
+	// Profiling endpoints (enable in non-production environments)
+	if cfg.EnablePprof {
+		r.Route("/debug/pprof", func(r chi.Router) {
+			r.HandleFunc("/", pprof.Index)
+			r.HandleFunc("/cmdline", pprof.Cmdline)
+			r.HandleFunc("/profile", pprof.Profile)
+			r.HandleFunc("/symbol", pprof.Symbol)
+			r.HandleFunc("/trace", pprof.Trace)
+			r.Handle("/goroutine", pprof.Handler("goroutine"))
+			r.Handle("/heap", pprof.Handler("heap"))
+			r.Handle("/allocs", pprof.Handler("allocs"))
+			r.Handle("/threadcreate", pprof.Handler("threadcreate"))
+			r.Handle("/block", pprof.Handler("block"))
+			r.Handle("/mutex", pprof.Handler("mutex"))
+		})
+	}
 
 	// API routes
 	r.Route("/api/v1", func(r chi.Router) {
