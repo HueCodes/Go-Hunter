@@ -85,11 +85,14 @@ Modern organizations face unprecedented challenges in managing their cloud attac
 ### Platform Features
 
 - **Multi-Tenant Architecture** - Full organization isolation with RBAC
-- **JWT Authentication** - Secure, stateless authentication
+- **JWT + API Key Authentication** - Stateless auth for web and CI/CD automation
 - **Real-Time Dashboard** - HTMX-powered live updates
-- **RESTful API** - Complete programmatic access
+- **RESTful API** - Complete programmatic access with Prometheus metrics
 - **Encrypted Credentials** - age encryption for cloud provider secrets
-- **Audit Logging** - Track all security-relevant actions
+- **Audit Logging** - Track all security-relevant operations
+- **Notification Engine** - Slack, Discord, Email, and generic webhook integrations
+- **Asset Tagging** - Key:value tags with tag-based filtering
+- **Brute-Force Protection** - Login rate limiting with exponential backoff
 
 ---
 
@@ -207,10 +210,11 @@ curl http://localhost:8080/api/v1/scans/550e8400-e29b-41d4-a716-446655440003 \
 
 ### Error Format
 
-All errors follow a consistent format:
+All errors follow a consistent format with machine-readable error codes:
 
 ```json
 {
+  "code": "validation_error",
   "error": "Validation failed",
   "details": {
     "email": "Invalid email format",
@@ -218,6 +222,8 @@ All errors follow a consistent format:
   }
 }
 ```
+
+Error codes: `bad_request`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `validation_error`, `internal_error`, `service_unavailable`
 
 ---
 
@@ -253,6 +259,65 @@ All errors follow a consistent format:
 
 ```
 
+### Architecture
+
+```mermaid
+graph TB
+    Client[Web Browser / API Client / CLI]
+
+    subgraph Server["Server (cmd/server)"]
+        Router[Chi Router + Middleware]
+        Auth[JWT / API Key Auth]
+        Handlers[API Handlers]
+        Dashboard[HTMX Dashboard]
+    end
+
+    subgraph Worker["Worker (cmd/worker)"]
+        Asynq[Asynq Task Processor]
+        Discovery[Asset Discovery]
+        PortScan[Port Scanner]
+        HTTPProbe[HTTP Prober]
+        Crawler[Web Crawler]
+        VulnCheck[Vuln Checker]
+    end
+
+    subgraph Infra["Infrastructure"]
+        PG[(PostgreSQL 16)]
+        Redis[(Redis 7)]
+    end
+
+    subgraph Cloud["Cloud Providers"]
+        AWS[AWS]
+        Azure[Azure]
+        GCP[GCP]
+        CF[Cloudflare]
+        DO[DigitalOcean]
+    end
+
+    subgraph Notifications["Notification Providers"]
+        Slack[Slack]
+        Discord[Discord]
+        Email[Email]
+        Webhook[Webhook]
+    end
+
+    Client --> Router
+    Router --> Auth
+    Auth --> Handlers
+    Auth --> Dashboard
+    Handlers --> PG
+    Handlers --> Redis
+    Worker --> PG
+    Worker --> Redis
+    Asynq --> Discovery
+    Asynq --> PortScan
+    Asynq --> HTTPProbe
+    Asynq --> Crawler
+    Asynq --> VulnCheck
+    Discovery --> Cloud
+    Worker --> Notifications
+```
+
 ### Tech Stack
 
 | Layer | Technology |
@@ -281,8 +346,11 @@ go-hunter/
 │   ├── tasks/           # Asynq task definitions
 │   └── web/             # Embedded templates
 ├── pkg/
+│   ├── circuitbreaker/  # Circuit breaker for API resilience
 │   ├── config/          # Viper configuration
 │   ├── crypto/          # age encryption wrapper
+│   ├── errors/          # Typed domain errors
+│   ├── metrics/         # Prometheus metrics
 │   ├── queue/           # Asynq client wrapper
 │   └── util/            # Logging, cron helpers
 ├── migrations/          # SQL migration files
@@ -299,12 +367,15 @@ For detailed architecture documentation, see `docs/architecture/`.
 
 ### Security Features
 
-- **Encrypted Credentials** - Cloud provider secrets encrypted at rest using age
-- **JWT Authentication** - Stateless, time-limited tokens
+- **Encrypted Credentials** - Cloud provider secrets encrypted at rest using age (X25519 + ChaCha20-Poly1305)
+- **JWT + API Key Auth** - Stateless, time-limited tokens; bcrypt-hashed API keys with expiration
 - **CSRF Protection** - Token-based CSRF prevention for web forms
-- **Rate Limiting** - API rate limiting to prevent abuse
-- **Input Validation** - Strict validation on all API inputs
-- **Multi-Tenant Isolation** - Organization-scoped data access
+- **Rate Limiting** - API rate limiting to prevent abuse; login-specific brute-force protection
+- **Input Validation** - Strict validation on all API inputs; no internal error detail leakage
+- **Multi-Tenant Isolation** - Organization-scoped data access on every query
+- **Audit Logging** - All security-sensitive operations logged with IP, user agent, auth method
+- **Scanner Safety** - Private/reserved IP blocking prevents SSRF-style scanning
+- **Hardened Headers** - CSP, HSTS, CORP, COOP, X-Frame-Options, Permissions-Policy
 
 ### Reporting Vulnerabilities
 
@@ -327,20 +398,30 @@ See [SECURITY.md](SECURITY.md) for our full security policy.
 - [x] Multi-tenant architecture with RBAC
 - [x] HTMX real-time dashboard
 
-### In Progress
+### Recently Completed
 
-- [ ] Slack/Discord/Teams notifications
-- [ ] Custom vulnerability checks (YAML-based)
-- [ ] Asset tagging and grouping
-- [ ] Kubernetes cluster scanning
+- [x] API key authentication for CI/CD integration
+- [x] Notification engine (Slack, Discord, Email, Webhook)
+- [x] Asset tagging with tag-based filtering
+- [x] Structured error handling with typed domain errors
+- [x] Prometheus metrics endpoint (`/metrics`)
+- [x] Login brute-force protection
+- [x] Audit logging for security operations
+- [x] Circuit breaker for cloud API resilience
+- [x] Response compression (gzip)
+- [x] Hardened CSP and security headers
+- [x] Scanner target validation (private IP blocking)
+- [x] Production config validation
 
 ### Planned
 
-- [ ] JIRA/ServiceNow integration
-- [ ] Compliance reporting (SOC2, ISO27001)
-- [ ] GraphQL API
-- [ ] Terraform state import
-- [ ] CLI tool for CI/CD integration
+- [ ] Custom vulnerability checks (YAML-based templates)
+- [ ] CLI tool (`gohunter`) for CI/CD integration
+- [ ] Attack surface diffing between scans
+- [ ] Risk scoring per asset
+- [ ] Compliance mapping (CIS, SOC2, PCI DSS)
+- [ ] Terraform state import for shadow IT detection
+- [ ] Helm chart for Kubernetes deployment
 - [ ] SAML/OIDC SSO
 
 ---

@@ -8,25 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Comprehensive test suite for task handlers (HandleAssetDiscovery, HandlePortScan, HandleHTTPProbe, HandleCrawl, HandleVulnCheck, HandleSchedulerTick)
-- Authentication middleware test suite with full JWT validation coverage
-- AWS provider test suite with mock client infrastructure
-- Test utilities package with reusable fixtures and helpers (`internal/testutil`)
-- MIT LICENSE file for legal clarity
-- Security hardening: Docker containers now run as non-root user (uid/gid 1000)
+- Structured error handling with typed domain errors (`pkg/errors`) - NotFound, Unauthorized, Forbidden, Conflict, Validation, Internal, Unavailable
+- API key authentication for CI/CD automation (bcrypt-hashed, prefix-based lookup, expiration support)
+- Prometheus metrics endpoint (`/metrics`) with HTTP request duration, active scans, findings by severity
+- Notification engine with pluggable providers: Slack, Discord, Email (SMTP), generic Webhook (HMAC-SHA256)
+- Asset tagging with key:value pairs and tag-based filtering via PostgreSQL jsonb
+- Audit logging for security-sensitive operations (auth, credentials, scans, API keys)
+- Circuit breaker for cloud provider API resilience
+- Login brute-force protection with exponential backoff (5 attempts, 1min lockout)
+- Scanner target validation to block private/reserved IP scanning
+- Response compression (gzip) middleware with sync.Pool for writer reuse
+- Comprehensive startup config validation (port ranges, SSL modes, environments)
+- Database ConnMaxIdleTime configuration
+- GitHub issue templates (bug report, feature request) and PR template
+- CHANGELOG.md in Keep a Changelog format
 
 ### Changed
-- Increased overall test coverage from 20% to 23.6%
-- Enhanced Dockerfile with security best practices (non-root execution)
-- Improved test infrastructure with comprehensive helper functions
-
-### Fixed
-- Compilation error in `benchmark_test.go` UUID pointer handling
-- Broken demo image reference in README
+- Hardened Content-Security-Policy with specific CDN sources, frame-ancestors, base-uri, form-action
+- Added Cross-Origin-Opener-Policy and Cross-Origin-Resource-Policy headers
+- Error responses now include machine-readable `code` field
+- Auth middleware supports both JWT and API key authentication
+- Database connection pool settings logged on startup
 
 ### Security
-- Docker containers now run as non-root user `gohunter` (uid/gid 1000)
-- This prevents privilege escalation and follows container security best practices
+- Internal error details never leak to API responses (logged server-side only)
+- API keys stored as bcrypt hashes with prefix-based lookup
+- CSP restricts connect-src, frame-ancestors, base-uri, form-action
+- Private IP/reserved range scanning blocked by default
+- Login endpoint rate-limited independently with exponential backoff
 
 ## [1.0.0] - 2026-01-27
 
