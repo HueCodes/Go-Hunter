@@ -1,0 +1,14 @@
+id: s3-no-versioning
+info:
+  name: S3 Bucket Without Versioning
+  description: S3 bucket does not have versioning enabled, risking data loss
+  severity: medium
+  category: cloud-storage
+  tags: [aws, s3, data-protection]
+checks:
+  - type: metadata_match
+    match:
+      versioning_enabled: "false"
+remediation: |
+  Enable versioning on the S3 bucket to protect against accidental deletion.
+  Use aws s3api put-bucket-versioning --versioning-configuration Status=Enabled.

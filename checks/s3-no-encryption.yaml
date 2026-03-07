@@ -1,0 +1,16 @@
+id: s3-no-encryption
+info:
+  name: S3 Bucket Without Server-Side Encryption
+  description: S3 bucket does not have default server-side encryption enabled
+  severity: high
+  category: cloud-storage
+  tags: [aws, s3, encryption, compliance]
+  references:
+    - https://docs.aws.amazon.com/AmazonS3/latest/userguide/serv-side-encryption.html
+checks:
+  - type: metadata_match
+    match:
+      encryption_enabled: "false"
+remediation: |
+  Enable default encryption on the S3 bucket using SSE-S3, SSE-KMS, or SSE-C.
+  Use aws s3api put-bucket-encryption to configure default encryption.

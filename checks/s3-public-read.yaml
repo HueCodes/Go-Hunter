@@ -1,0 +1,21 @@
+id: s3-public-read
+info:
+  name: S3 Bucket Public Read Access
+  description: S3 bucket allows public read access via ACL grants
+  severity: critical
+  category: cloud-storage
+  tags: [aws, s3, misconfiguration, public-access]
+  references:
+    - https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html
+checks:
+  - type: metadata_match
+    match:
+      public_read: "true"
+  - type: metadata_match
+    match:
+      acl_public: "true"
+remediation: |
+  1. Enable S3 Block Public Access at the account level
+  2. Remove public ACL grants from the bucket
+  3. Use bucket policies with explicit deny for public access
+  4. Enable CloudTrail logging for S3 data events

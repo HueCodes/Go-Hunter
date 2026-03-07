@@ -1,0 +1,17 @@
+id: missing-environment-tag
+info:
+  name: Asset Missing Environment Tag
+  description: Asset does not have an environment tag, making it difficult to classify
+  severity: low
+  category: governance
+  tags: [tagging, governance, compliance]
+checks:
+  - type: tag_match
+    match:
+      environment: "!exists"
+  - type: tag_match
+    match:
+      env: "!exists"
+remediation: |
+  Add an environment tag (e.g., production, staging, development) to this asset.
+  Consistent tagging enables better security policy enforcement and cost allocation.

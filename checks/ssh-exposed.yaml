@@ -1,0 +1,16 @@
+id: ssh-exposed
+info:
+  name: SSH Service Exposed to Internet
+  description: SSH service is accessible from the public internet
+  severity: medium
+  category: network-security
+  tags: [ssh, network, access-control]
+checks:
+  - type: metadata_match
+    match:
+      service: ssh
+remediation: |
+  1. Restrict SSH access to specific IP ranges using security groups
+  2. Use a bastion host or VPN for SSH access
+  3. Disable password authentication, use key-based auth only
+  4. Consider using AWS Systems Manager Session Manager or similar

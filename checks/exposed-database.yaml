@@ -1,0 +1,31 @@
+id: exposed-database-port
+info:
+  name: Database Port Exposed to Internet
+  description: A database service port is accessible from the public internet
+  severity: critical
+  category: network-security
+  tags: [database, network, exposure]
+checks:
+  - type: metadata_match
+    match:
+      service: mysql
+  - type: metadata_match
+    match:
+      service: postgresql
+  - type: metadata_match
+    match:
+      service: mongodb
+  - type: metadata_match
+    match:
+      service: redis
+  - type: metadata_match
+    match:
+      service: elasticsearch
+  - type: metadata_match
+    match:
+      service: mssql
+remediation: |
+  1. Restrict database access to private subnets using security groups/firewall rules
+  2. Use VPN or SSH tunnels for remote database access
+  3. Enable authentication and strong passwords
+  4. Consider using cloud-managed database services with private endpoints

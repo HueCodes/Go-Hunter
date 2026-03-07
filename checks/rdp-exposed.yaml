@@ -1,0 +1,18 @@
+id: rdp-exposed
+info:
+  name: RDP Service Exposed to Internet
+  description: Remote Desktop Protocol service is accessible from the public internet
+  severity: critical
+  category: network-security
+  tags: [rdp, windows, remote-access]
+  references:
+    - https://www.cisa.gov/news-events/alerts/2019/06/20/microsoft-bluekeep-vulnerability
+checks:
+  - type: metadata_match
+    match:
+      service: rdp
+remediation: |
+  1. Block RDP (port 3389) from the public internet
+  2. Use VPN or Azure Bastion for remote access
+  3. Enable Network Level Authentication (NLA)
+  4. Apply latest security patches for BlueKeep and related vulnerabilities

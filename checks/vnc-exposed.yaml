@@ -1,0 +1,15 @@
+id: vnc-exposed
+info:
+  name: VNC Service Exposed to Internet
+  description: VNC service is accessible from the public internet with potentially weak authentication
+  severity: high
+  category: network-security
+  tags: [vnc, remote-access, exposure]
+checks:
+  - type: metadata_match
+    match:
+      service: vnc
+remediation: |
+  1. Block VNC ports (5900-5910) from the public internet
+  2. Use SSH tunneling or VPN for VNC access
+  3. Ensure strong password authentication is configured

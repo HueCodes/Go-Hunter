@@ -1,0 +1,14 @@
+id: telnet-exposed
+info:
+  name: Telnet Service Exposed
+  description: Telnet service transmits data in plaintext and should not be used
+  severity: critical
+  category: network-security
+  tags: [telnet, plaintext, deprecated]
+checks:
+  - type: metadata_match
+    match:
+      service: telnet
+remediation: |
+  Disable the Telnet service immediately. Use SSH for remote access instead.
+  Telnet transmits all data including credentials in plaintext.
