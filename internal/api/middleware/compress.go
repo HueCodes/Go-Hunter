@@ -25,7 +25,7 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 }
 
 func (w *gzipResponseWriter) Flush() {
-	w.writer.Flush()
+	_ = w.writer.Flush()
 	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}
@@ -38,7 +38,11 @@ func Compress(next http.Handler) http.Handler {
 			return
 		}
 
-		gz := gzipPool.Get().(*gzip.Writer)
+		gz, ok := gzipPool.Get().(*gzip.Writer)
+		if !ok {
+			next.ServeHTTP(w, r)
+			return
+		}
 		defer gzipPool.Put(gz)
 
 		gz.Reset(w)

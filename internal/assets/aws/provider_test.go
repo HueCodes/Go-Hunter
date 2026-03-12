@@ -2,14 +2,9 @@ package aws
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"testing"
-
-	"github.com/aws/aws-sdk-go-v2/service/ec2"
-	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/hugh/go-hunter/internal/assets/types"
 	"github.com/hugh/go-hunter/internal/database/models"
 	"github.com/stretchr/testify/assert"
@@ -260,34 +255,6 @@ func TestDiscoverRegion_ErrorAccumulation(t *testing.T) {
 
 	// Test that if EC2, S3, and Route53 all fail, all errors are collected
 	// and returned along with any successful discoveries
-}
-
-// Mock implementations for future use when adding comprehensive mocking
-
-// mockSTSClient would mock the STS API for GetCallerIdentity
-type mockSTSClient struct {
-	GetCallerIdentityFunc func(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
-}
-
-func (m *mockSTSClient) GetCallerIdentity(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error) {
-	if m.GetCallerIdentityFunc != nil {
-		return m.GetCallerIdentityFunc(ctx, params, optFns...)
-	}
-	return nil, errors.New("not implemented")
-}
-
-// mockEC2Client would mock the EC2 API for DescribeInstances
-type mockEC2Client struct {
-	DescribeInstancesFunc func(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
-}
-
-func (m *mockEC2Client) DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
-	if m.DescribeInstancesFunc != nil {
-		return m.DescribeInstancesFunc(ctx, params, optFns...)
-	}
-	return &ec2.DescribeInstancesOutput{
-		Reservations: []ec2types.Reservation{},
-	}, nil
 }
 
 // Example of a complete test with mocking (commented out until SDK is refactored for DI)
