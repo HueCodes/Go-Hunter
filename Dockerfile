@@ -23,10 +23,10 @@ FROM alpine:3.20 AS server
 RUN apk add --no-cache ca-certificates tzdata
 RUN addgroup -g 1000 gohunter && \
     adduser -D -u 1000 -G gohunter gohunter
+WORKDIR /app
 COPY --from=builder /bin/server /bin/server
 COPY --from=builder /app/migrations /app/migrations
 RUN chown -R gohunter:gohunter /app /bin/server
-WORKDIR /app
 USER gohunter
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
@@ -38,9 +38,9 @@ FROM alpine:3.20 AS worker
 RUN apk add --no-cache ca-certificates tzdata libpcap
 RUN addgroup -g 1000 gohunter && \
     adduser -D -u 1000 -G gohunter gohunter
+WORKDIR /app
 COPY --from=builder /bin/worker /bin/worker
 RUN chown -R gohunter:gohunter /app /bin/worker
-WORKDIR /app
 USER gohunter
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD pgrep worker || exit 1
