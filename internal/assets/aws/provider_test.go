@@ -9,9 +9,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	"github.com/aws/aws-sdk-go-v2/service/route53"
-	route53types "github.com/aws/aws-sdk-go-v2/service/route53/types"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/hugh/go-hunter/internal/assets/types"
 	"github.com/hugh/go-hunter/internal/database/models"
@@ -290,32 +287,6 @@ func (m *mockEC2Client) DescribeInstances(ctx context.Context, params *ec2.Descr
 	}
 	return &ec2.DescribeInstancesOutput{
 		Reservations: []ec2types.Reservation{},
-	}, nil
-}
-
-// mockS3Client would mock the S3 API for ListBuckets
-type mockS3Client struct {
-	ListBucketsFunc func(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error)
-}
-
-func (m *mockS3Client) ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error) {
-	if m.ListBucketsFunc != nil {
-		return m.ListBucketsFunc(ctx, params, optFns...)
-	}
-	return &s3.ListBucketsOutput{}, nil
-}
-
-// mockRoute53Client would mock the Route53 API for ListHostedZones
-type mockRoute53Client struct {
-	ListHostedZonesFunc func(ctx context.Context, params *route53.ListHostedZonesInput, optFns ...func(*route53.Options)) (*route53.ListHostedZonesOutput, error)
-}
-
-func (m *mockRoute53Client) ListHostedZones(ctx context.Context, params *route53.ListHostedZonesInput, optFns ...func(*route53.Options)) (*route53.ListHostedZonesOutput, error) {
-	if m.ListHostedZonesFunc != nil {
-		return m.ListHostedZonesFunc(ctx, params, optFns...)
-	}
-	return &route53.ListHostedZonesOutput{
-		HostedZones: []route53types.HostedZone{},
 	}, nil
 }
 

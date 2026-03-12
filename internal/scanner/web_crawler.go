@@ -175,13 +175,16 @@ func (c *WebCrawler) CrawlURL(ctx context.Context, startURL string) (*CrawlResul
 	queueMu := sync.Mutex{}
 
 	// Process queue
-	for len(queue) > 0 && result.PagesCrawled < c.maxPages {
+	for {
+		// Check context cancellation
 		select {
 		case <-ctx.Done():
+			wg.Wait()
 			return result, ctx.Err()
 		default:
 		}
 
+		// Check loop conditions under locks
 		queueMu.Lock()
 		if len(queue) == 0 {
 			queueMu.Unlock()
@@ -191,8 +194,12 @@ func (c *WebCrawler) CrawlURL(ctx context.Context, startURL string) (*CrawlResul
 		queue = queue[1:]
 		queueMu.Unlock()
 
-		// Skip if already visited or too deep
 		mu.Lock()
+		if result.PagesCrawled >= c.maxPages {
+			mu.Unlock()
+			break
+		}
+		// Skip if already visited or too deep
 		if visited[item.url] || item.depth > c.maxDepth {
 			mu.Unlock()
 			continue

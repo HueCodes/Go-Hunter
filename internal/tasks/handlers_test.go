@@ -15,7 +15,6 @@ import (
 	"github.com/hugh/go-hunter/pkg/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 // TestNewHandler tests handler initialization
@@ -426,16 +425,3 @@ func TestRegisterHandlers(t *testing.T) {
 	})
 }
 
-// Test helper function to verify scan was marked as failed with error message
-func verifyScanFailed(t *testing.T, db *gorm.DB, scanID uuid.UUID, expectedErrorSubstring string) {
-	t.Helper()
-
-	var scan models.Scan
-	err := db.First(&scan, scanID).Error
-	require.NoError(t, err)
-
-	assert.Equal(t, models.ScanStatusFailed, scan.Status)
-	if expectedErrorSubstring != "" {
-		assert.Contains(t, scan.Error, expectedErrorSubstring)
-	}
-}
