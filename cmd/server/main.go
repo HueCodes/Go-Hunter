@@ -154,17 +154,25 @@ func main() {
 
 	// Close Asynq client
 	if asynqClient != nil {
-		asynqClient.Close()
+		if err := asynqClient.Close(); err != nil {
+			logger.Error("failed to close asynq client", "error", err)
+		}
 	}
 
 	// Close Redis connection
 	if redisClient != nil {
-		redisClient.Close()
+		if err := redisClient.Close(); err != nil {
+			logger.Error("failed to close redis", "error", err)
+		}
 	}
 
 	// Close database connection
-	sqlDB, _ := db.DB()
-	sqlDB.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Error("failed to get sql.DB", "error", err)
+	} else if err := sqlDB.Close(); err != nil {
+		logger.Error("failed to close database", "error", err)
+	}
 
 	logger.Info("server stopped")
 }

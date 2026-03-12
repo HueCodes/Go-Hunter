@@ -30,7 +30,8 @@ type Check struct {
 }
 
 func LoadTemplate(path string) (*CheckTemplate, error) {
-	data, err := os.ReadFile(path)
+	path = filepath.Clean(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- paths are from internal config, not user input
 	if err != nil {
 		return nil, fmt.Errorf("reading check template %s: %w", path, err)
 	}

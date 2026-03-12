@@ -85,7 +85,7 @@ func NewHTTPProber(logger *slog.Logger, cfg *HTTPProbeConfig) *HTTPProber {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true, // We want to probe even invalid certs
+			InsecureSkipVerify: true, // #nosec G402 -- Security scanner must probe hosts with invalid/self-signed certs
 		},
 		DialContext: (&net.Dialer{
 			Timeout:   timeout,

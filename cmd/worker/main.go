@@ -112,8 +112,12 @@ func main() {
 	<-ctx.Done()
 
 	// Close database connection
-	sqlDB, _ := db.DB()
-	sqlDB.Close()
+	sqlDB, err := db.DB()
+	if err != nil {
+		logger.Error("failed to get sql.DB", "error", err)
+	} else if err := sqlDB.Close(); err != nil {
+		logger.Error("failed to close database", "error", err)
+	}
 
 	logger.Info("worker stopped")
 }

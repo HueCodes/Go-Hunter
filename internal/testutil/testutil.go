@@ -53,7 +53,7 @@ func CleanupTestDB(t *testing.T, db *gorm.DB) {
 		t.Logf("warning: failed to get sql.DB: %v", err)
 		return
 	}
-	sqlDB.Close()
+	_ = sqlDB.Close() // #nosec G104 -- best-effort cleanup in tests
 }
 
 // TestOrg creates a test organization
@@ -332,7 +332,7 @@ func (ts *TestSetup) Cleanup() {
 	if ts.DB != nil {
 		sqlDB, err := ts.DB.DB()
 		if err == nil {
-			sqlDB.Close()
+			_ = sqlDB.Close() // #nosec G104 -- best-effort cleanup in tests
 		}
 	}
 }

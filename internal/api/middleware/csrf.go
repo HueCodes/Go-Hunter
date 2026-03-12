@@ -136,6 +136,7 @@ func CSRF(store *CSRFStore) func(http.Handler) http.Handler {
 			// Get CSRF token from header or form
 			csrfToken := r.Header.Get(csrfHeaderName)
 			if csrfToken == "" {
+				r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 				csrfToken = r.FormValue(csrfFormField)
 			}
 

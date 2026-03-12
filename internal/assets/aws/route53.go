@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -43,7 +44,7 @@ func (p *Provider) discoverRoute53(ctx context.Context, cfg aws.Config) ([]types
 				Source: "aws:route53",
 				Metadata: map[string]string{
 					"zone_id":      zoneID,
-					"record_count": string(rune(aws.ToInt64(zone.ResourceRecordSetCount))),
+					"record_count": strconv.FormatInt(aws.ToInt64(zone.ResourceRecordSetCount), 10),
 					"private_zone": boolToString(zone.Config != nil && zone.Config.PrivateZone),
 				},
 			})
@@ -157,5 +158,5 @@ func ttlToString(ttl *int64) string {
 	if ttl == nil {
 		return "0"
 	}
-	return string(rune(*ttl))
+	return strconv.FormatInt(*ttl, 10)
 }

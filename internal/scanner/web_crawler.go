@@ -118,7 +118,7 @@ func NewWebCrawler(logger *slog.Logger, cfg *WebCrawlerConfig) *WebCrawler {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
+			InsecureSkipVerify: true, // #nosec G402 -- Security scanner must probe hosts with invalid/self-signed certs
 		},
 		DialContext: (&net.Dialer{
 			Timeout:   timeout,

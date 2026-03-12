@@ -69,6 +69,7 @@ func (h *DashboardHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // LoginPost handles form-based login (POST /login)
 func (h *DashboardHandler) LoginPost(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 	if err := r.ParseForm(); err != nil {
 		h.render(w, "login.html", map[string]interface{}{"Error": "Invalid form data"})
 		return

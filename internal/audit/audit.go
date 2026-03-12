@@ -18,9 +18,9 @@ const (
 	ActionLogout             = "auth.logout"
 	ActionRegister           = "auth.register"
 	ActionUserCreated        = "user.created"
-	ActionCredentialCreated  = "credential.created"
-	ActionCredentialDeleted  = "credential.deleted"
-	ActionCredentialTested   = "credential.tested"
+	ActionCredentialCreated  = "credential.created"  // #nosec G101 -- Not a credential, this is an audit event name
+	ActionCredentialDeleted  = "credential.deleted"  // #nosec G101 -- Not a credential, this is an audit event name
+	ActionCredentialTested   = "credential.tested"   // #nosec G101 -- Not a credential, this is an audit event name
 	ActionScanCreated        = "scan.created"
 	ActionScanCancelled      = "scan.cancelled"
 	ActionAPIKeyCreated      = "apikey.created"
